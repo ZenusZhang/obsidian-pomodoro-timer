@@ -22,15 +22,9 @@ const start = () => {
     }
 }
 
-const reset = () => {
-    timer.reset()
-}
-
-const pause = () => {
-    if ($timer.running) {
-        timer.pause()
+    const reset = () => {
+        timer.reset()
     }
-}
 
 const toggleTimer = () => {
     timer.toggleTimer()
@@ -140,27 +134,6 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
                         stroke-linejoin="round"
                         class="lucide lucide-play"
                         ><polygon points="5 3 19 12 5 21 5 3" /></svg
-                    >
-                </span>
-            {:else}
-                <span on:click={pause} class="control">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-pause"
-                        ><rect width="4" height="16" x="6" y="4" /><rect
-                            width="4"
-                            height="16"
-                            x="14"
-                            y="4"
-                        /></svg
                     >
                 </span>
             {/if}

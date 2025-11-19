@@ -111,6 +111,18 @@ export default class Logger {
     /**
      * Update reward tracking information (ARV and average ARV) for the
      * most recent pomodoro in the Pomodoro Section.
+     *
+     * Behaviour details for POMODORO_SECTION format:
+     *   - ARV line is updated every time we collect a new sample so the
+     *     user can see the series while the pomodoro is running.
+     *   - The avg ARV line is only written once the current pomodoro has
+     *     been ended (i.e. its corresponding "end" line exists).
+     *   - Both ARV and avg ARV lines are inserted before the matching
+     *     "end" line so that the visual order is:
+     *         - 🍅 1 start ...
+     *         > ARV: ...
+     *         > avg ARV: ...
+     *         - 1 end ...
      */
     public async updateRewardTracking(ctx: LogContext): Promise<void> {
         const settings = this.plugin.getSettings()
@@ -409,6 +421,7 @@ export default class Logger {
         }
 
         let blockTailIndex: number
+        const hasEndLine = endLineIndex !== -1
         if (endLineIndex !== -1) {
             blockTailIndex = endLineIndex
         } else if (nextStartIndex !== -1) {
@@ -418,9 +431,9 @@ export default class Logger {
         }
 
         const isRewardLine = (line: string) =>
-            /^\s*-\s*ARV:/i.test(line) ||
-            /^\s*-\s*avg ARV:/i.test(line) ||
-            /^\s*-\s*avg arv:/i.test(line)
+            /^\s*[>-]\s*ARV:/i.test(line) ||
+            /^\s*[>-]\s*avg ARV:/i.test(line) ||
+            /^\s*[>-]\s*avg arv:/i.test(line)
 
         let i = lastStartIndex + 1
         while (i < blockTailIndex) {
@@ -441,13 +454,21 @@ export default class Logger {
             const tStr = `${s.minutesFromStart}m`
             return `${s.value}, ${tStr}`
         })
-        const arvLine = `- ARV: ${arvParts.join('; ')}`
+        const arvLine = `> ARV: ${arvParts.join('; ')}`
 
-        const avg =
-            samples.reduce((sum, s) => sum + s.value, 0) / samples.length
-        const avgLine = `- avg ARV: ${avg.toFixed(2)}`
+        // Only show the average once the pomodoro has an explicit "end" line.
+        const insertIndex = blockTailIndex
 
-        lines.splice(blockTailIndex, 0, arvLine, avgLine)
+        if (hasEndLine) {
+            const avg =
+                samples.reduce((sum, s) => sum + s.value, 0) / samples.length
+            const avgLine = `> avg ARV: ${avg.toFixed(2)}`
+
+            lines.splice(insertIndex, 0, arvLine, avgLine)
+        } else {
+            // Session is still running – update only the ARV series.
+            lines.splice(insertIndex, 0, arvLine)
+        }
 
         await app.vault.modify(file, lines.join('\n'))
     }

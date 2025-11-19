@@ -68,6 +68,10 @@ export type TimerStore = TimerState & {
 
 export default class Timer implements Readable<TimerStore> {
     static DEFAULT_NOTIFICATION_AUDIO = new Audio(DEFAULT_NOTIFICATION)
+    // Separate audio clip for ARV reward reminders (piano-like timbre).
+    static REWARD_NOTIFICATION_AUDIO = new Audio(
+        'https://assets.mixkit.co/active_storage/sfx/473/473-preview.mp3',
+    )
 
     private plugin: PomodoroTimerPlugin
 
@@ -272,7 +276,7 @@ export default class Timer implements Readable<TimerStore> {
         }
 
         if (settings.notificationSound) {
-            this.playAudio()
+            this.playRewardAudio()
         }
     }
 
@@ -422,9 +426,12 @@ export default class Timer implements Readable<TimerStore> {
     }
 
     public reset() {
+        let ctx: LogContext | null = null
         this.update((state) => {
-            if (state.elapsed > 0) {
-                this.logger.log(this.createLogContext(state))
+            const shouldTreatAsEnd =
+                state.running && state.inSession && state.elapsed > 0
+            if (shouldTreatAsEnd) {
+                ctx = this.createLogContext(state)
             }
 
             state.duration =
@@ -445,6 +452,10 @@ export default class Timer implements Readable<TimerStore> {
             state.elapsed = 0
             return state
         })
+        // Treat resetting a running pomodoro as an explicit "end" event.
+        if (ctx) {
+            void this.processLog(ctx)
+        }
     }
 
     public toggleMode(callback?: (state: TimerState) => void) {
@@ -473,6 +484,15 @@ export default class Timer implements Readable<TimerStore> {
                 audio = new Audio(soundSrc)
             }
         }
+        // Restart from the beginning for short notification clips.
+        audio.currentTime = 0
+        audio.play()
+    }
+
+    public playRewardAudio() {
+        const audio = Timer.REWARD_NOTIFICATION_AUDIO
+        // Always restart from the beginning for reward reminders.
+        audio.currentTime = 0
         audio.play()
     }
 
