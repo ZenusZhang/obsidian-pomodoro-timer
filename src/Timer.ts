@@ -184,11 +184,13 @@ export default class Timer implements Readable<TimerStore> {
         if (ctx.mode == 'WORK') {
             await this.plugin.tracker?.updateActual()
         }
+        await this.logger.logPomodoroEnd(ctx)
         const logFile = await this.logger.log(ctx)
         this.notify(ctx, logFile)
     }
 
     public start() {
+        let isNewSession = false
         this.update((s) => {
             let now = new Date().getTime()
             if (!s.inSession) {
@@ -197,6 +199,7 @@ export default class Timer implements Readable<TimerStore> {
                 s.duration = s.mode === 'WORK' ? s.workLen : s.breakLen
                 s.count = s.duration * 60 * 1000
                 s.startTime = now
+                isNewSession = true
             }
             s.inSession = true
             s.running = true
@@ -206,6 +209,10 @@ export default class Timer implements Readable<TimerStore> {
             })
             return s
         })
+        if (isNewSession) {
+            const ctx = this.createLogContext(this.state)
+            this.logger.logPomodoroStart(ctx)
+        }
     }
 
     private endSession(state: TimerState) {

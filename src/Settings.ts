@@ -11,7 +11,7 @@ import {
 
 type LogFileType = 'DAILY' | 'WEEKLY' | 'FILE' | 'NONE'
 type LogLevel = 'ALL' | 'WORK' | 'BREAK'
-type LogFormat = 'SIMPLE' | 'VERBOSE' | 'CUSTOM'
+type LogFormat = 'SIMPLE' | 'VERBOSE' | 'CUSTOM' | 'POMODORO_SECTION'
 export type TaskFormat = 'TASKS' | 'DATAVIEW'
 
 export interface Settings {
@@ -258,6 +258,10 @@ export default class PomodoroSettings extends PluginSettingTab {
                     'YYYY-MM-DD HH:mm',
                 )})`
             }
+            if (this._settings.logFormat == 'POMODORO_SECTION') {
+                example =
+                    'Pomodoro Section: logs like "- 1 start 09:00 [[task link]]" and "- 1 end 09:25" will be written under "## Pomodoro Section"'
+            }
             new Setting(containerEl)
                 .setName('Log Format')
                 .setDesc(example)
@@ -267,6 +271,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                         SIMPLE: 'Simple',
                         VERBOSE: 'Verbose',
                         CUSTOM: 'Custom',
+                        POMODORO_SECTION: 'Pomodoro Section',
                     })
                     dropdown.setValue(this._settings.logFormat)
 

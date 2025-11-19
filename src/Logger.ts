@@ -46,6 +46,68 @@ export default class Logger {
         this.plugin = plugin
     }
 
+    /**
+     * Log the beginning of a pomodoro session into the dedicated Pomodoro
+     * Section in the chosen log file.
+     *
+     * This is a no-op unless:
+     *   - logFormat === 'POMODORO_SECTION'
+     *   - logFile is not 'NONE'
+     *   - ctx.mode === 'WORK' (only count real pomodoros)
+     */
+    public async logPomodoroStart(ctx: LogContext): Promise<void> {
+        const settings = this.plugin.getSettings()
+
+        if (settings.logFormat !== 'POMODORO_SECTION') {
+            return
+        }
+
+        // Only log according to log level
+        if (settings.logLevel !== 'ALL' && settings.logLevel !== ctx.mode) {
+            return
+        }
+
+        // Only count work sessions as pomodoros
+        if (ctx.mode !== 'WORK') {
+            return
+        }
+
+        const logFile = await this.resolveLogFile(ctx)
+        if (!logFile) {
+            return
+        }
+
+        await this.appendPomodoroSectionEvent(logFile, ctx, 'START')
+    }
+
+    /**
+     * Log the end of a pomodoro session into the Pomodoro Section.
+     *
+     * See the conditions in logPomodoroStart – they are mirrored here.
+     */
+    public async logPomodoroEnd(ctx: LogContext): Promise<void> {
+        const settings = this.plugin.getSettings()
+
+        if (settings.logFormat !== 'POMODORO_SECTION') {
+            return
+        }
+
+        if (settings.logLevel !== 'ALL' && settings.logLevel !== ctx.mode) {
+            return
+        }
+
+        if (ctx.mode !== 'WORK') {
+            return
+        }
+
+        const logFile = await this.resolveLogFile(ctx)
+        if (!logFile) {
+            return
+        }
+
+        await this.appendPomodoroSectionEvent(logFile, ctx, 'END')
+    }
+
     public async log(ctx: LogContext): Promise<TFile | void> {
         const logFile = await this.resolveLogFile(ctx)
         const log = this.createLog(ctx)
@@ -127,8 +189,128 @@ export default class Logger {
         }
     }
 
+    /**
+     * Append a single pomodoro event (start or end) into the "Pomodoro Section"
+     * of the given file.
+     *
+     * The format is:
+     *   - {pomo_id} start HH:mm [[file#^blockId|task description]]
+     *   - {pomo_id} end   HH:mm
+     *
+     * Where:
+     *   - pomo_id is the N-th pomodoro in this file (counted by "start" lines)
+     *   - The optional wiki link points to the tracked task (if any)
+     */
+    private async appendPomodoroSectionEvent(
+        file: TFile,
+        ctx: LogContext,
+        kind: 'START' | 'END',
+    ): Promise<void> {
+        const app = this.plugin.app
+        const content = await app.vault.read(file)
+        const lines = content.split('\n')
+
+        // Find or create the section header.
+        const headerRegex = /^#{1,6}\s+Pomodoro Section\s*$/i
+        let headerIndex = lines.findIndex((line) => headerRegex.test(line))
+
+        if (headerIndex === -1) {
+            // Trim trailing empty lines so the new section is tight at the end.
+            while (
+                lines.length > 0 &&
+                lines[lines.length - 1].trim().length === 0
+            ) {
+                lines.pop()
+            }
+
+            if (lines.length > 0) {
+                lines.push('')
+            }
+            lines.push('## Pomodoro Section')
+            headerIndex = lines.length - 1
+            lines.push('')
+        }
+
+        // Determine the range of lines that belong to the Pomodoro Section:
+        // from the header until the next header or EOF.
+        let sectionEnd = lines.length
+        for (let i = headerIndex + 1; i < lines.length; i++) {
+            if (/^#{1,6}\s+/.test(lines[i])) {
+                sectionEnd = i
+                break
+            }
+        }
+
+        const idRegex = /^\s*-\s*(\d+)\s+(start|end)\b/i
+        let maxStartId = 0
+        let maxEndId = 0
+
+        for (let i = headerIndex + 1; i < sectionEnd; i++) {
+            const match = lines[i].match(idRegex)
+            if (!match) continue
+            const id = parseInt(match[1], 10)
+            const type = match[2].toLowerCase()
+            if (type === 'start') {
+                maxStartId = Math.max(maxStartId, id)
+            } else if (type === 'end') {
+                maxEndId = Math.max(maxEndId, id)
+            }
+        }
+
+        let pomoId: number
+        if (kind === 'START') {
+            pomoId = maxStartId + 1
+        } else {
+            // END – attach to the most recent started pomodoro.
+            if (maxStartId === 0) {
+                pomoId = 1
+            } else {
+                pomoId = maxStartId
+            }
+        }
+
+        // Compute the display time in HH:mm.
+        const beginMoment = ctx.startTime
+            ? moment(ctx.startTime)
+            : moment(Date.now())
+        const endMoment =
+            kind === 'END'
+                ? beginMoment.clone().add(ctx.elapsed, 'milliseconds')
+                : beginMoment
+
+        const timeStr =
+            kind === 'START'
+                ? beginMoment.format('HH:mm')
+                : endMoment.format('HH:mm')
+
+        let superLink = ''
+        if (kind === 'START') {
+            const t = ctx.task
+            if (t.path && t.blockLink) {
+                const linkPath = t.path.replace(/\.md$/i, '')
+                const blockRef = t.blockLink.trim() // "^abcd"
+                const alias = t.name || t.description || linkPath
+                superLink = ` [[${linkPath}#${blockRef}|${alias}]]`
+            }
+        }
+
+        const line = `- ${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}`
+
+        // Insert at the end of the section (just before the next header or EOF).
+        lines.splice(sectionEnd, 0, line)
+
+        await app.vault.modify(file, lines.join('\n'))
+    }
+
     private async toText(log: TimerLog, file: TFile): Promise<string> {
         const settings = this.plugin.getSettings()
+
+        // When using the dedicated Pomodoro Section format, we handle writing
+        // to the note manually and suppress the old inline log entries.
+        if (settings.logFormat === 'POMODORO_SECTION') {
+            return ''
+        }
+
         if (
             settings.logFormat === 'CUSTOM' &&
             utils.getTemplater(this.plugin.app)
