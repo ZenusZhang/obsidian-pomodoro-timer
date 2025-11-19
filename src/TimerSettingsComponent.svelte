@@ -73,6 +73,15 @@ const updateBreakLen = (e: Event) => {
                 <input type="checkbox" bind:checked={$settings.logFocused} />
             </div>
         </div>
+        <div class="pomodoro-settings-item">
+            <div class="pomodoro-settings-label">Reward Value Record</div>
+            <div class="pomodoro-settings-control">
+                <input
+                    type="checkbox"
+                    bind:checked={$settings.rewardValueRecord}
+                />
+            </div>
+        </div>
     </div>
 </div>
 

@@ -108,6 +108,42 @@ export default class Logger {
         await this.appendPomodoroSectionEvent(logFile, ctx, 'END')
     }
 
+    /**
+     * Update reward tracking information (ARV and average ARV) for the
+     * most recent pomodoro in the Pomodoro Section.
+     */
+    public async updateRewardTracking(ctx: LogContext): Promise<void> {
+        const settings = this.plugin.getSettings()
+
+        if (settings.logFormat !== 'POMODORO_SECTION') {
+            return
+        }
+
+        if (settings.logLevel !== 'ALL' && settings.logLevel !== ctx.mode) {
+            return
+        }
+
+        if (ctx.mode !== 'WORK') {
+            return
+        }
+
+        const samples =
+            (ctx as any).rewardSamples as
+                | { value: number; minutesFromStart: number }[]
+                | undefined
+
+        if (!samples || samples.length === 0) {
+            return
+        }
+
+        const logFile = await this.resolveLogFile(ctx)
+        if (!logFile) {
+            return
+        }
+
+        await this.updatePomodoroSectionRewardLines(logFile, samples)
+    }
+
     public async log(ctx: LogContext): Promise<TFile | void> {
         const logFile = await this.resolveLogFile(ctx)
         const log = this.createLog(ctx)
@@ -121,7 +157,7 @@ export default class Logger {
         return logFile
     }
 
-    private async resolveLogFile(ctx: LogContext): Promise<TFile | void> {
+    public async resolveLogFile(ctx: LogContext): Promise<TFile | void> {
         const settings = this.plugin!.getSettings()
 
         // filter log level
@@ -194,7 +230,7 @@ export default class Logger {
      * of the given file.
      *
      * The format is:
-     *   - {pomo_id} start HH:mm [[file#^blockId|task description]]
+     *   - 🍅 {pomo_id} start HH:mm [[file#^blockId|task description]] ERV: e
      *   - {pomo_id} end   HH:mm
      *
      * Where:
@@ -241,7 +277,7 @@ export default class Logger {
             }
         }
 
-        const idRegex = /^\s*-\s*(\d+)\s+(start|end)\b/i
+        const idRegex = /^\s*-\s*(?:🍅\s+)?(\d+)\s+(start|end)\b/i
         let maxStartId = 0
         let maxEndId = 0
 
@@ -294,10 +330,124 @@ export default class Logger {
             }
         }
 
-        const line = `- ${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}`
+        const emojiPrefix = kind === 'START' ? '🍅 ' : ''
+
+        let erv = ''
+        if (
+            kind === 'START' &&
+            typeof (ctx as any).rewardExpected === 'number' &&
+            (ctx as any).rewardExpected != null
+        ) {
+            erv = ` ERV: ${(ctx as any).rewardExpected}`
+        }
+
+        const line = `- ${emojiPrefix}${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}${erv}`
 
         // Insert at the end of the section (just before the next header or EOF).
         lines.splice(sectionEnd, 0, line)
+
+        await app.vault.modify(file, lines.join('\n'))
+    }
+
+    private async updatePomodoroSectionRewardLines(
+        file: TFile,
+        samples: { value: number; minutesFromStart: number }[],
+    ): Promise<void> {
+        const app = this.plugin.app
+        const content = await app.vault.read(file)
+        const lines = content.split('\n')
+
+        const headerRegex = /^#{1,6}\s+Pomodoro Section\s*$/i
+        const startRegex = /^\s*-\s*(?:🍅\s+)?(\d+)\s+start\b/i
+
+        let headerIndex = lines.findIndex((line) => headerRegex.test(line))
+        if (headerIndex === -1) {
+            return
+        }
+
+        let sectionEnd = lines.length
+        for (let i = headerIndex + 1; i < lines.length; i++) {
+            if (/^#{1,6}\s+/.test(lines[i])) {
+                sectionEnd = i
+                break
+            }
+        }
+
+        let lastStartIndex = -1
+        let lastStartId = 0
+        for (let i = headerIndex + 1; i < sectionEnd; i++) {
+            const match = lines[i].match(startRegex)
+            if (match) {
+                lastStartIndex = i
+                lastStartId = parseInt(match[1], 10)
+            }
+        }
+
+        if (lastStartIndex === -1) {
+            return
+        }
+
+        let nextStartIndex = -1
+        for (let i = lastStartIndex + 1; i < sectionEnd; i++) {
+            if (startRegex.test(lines[i])) {
+                nextStartIndex = i
+                break
+            }
+        }
+
+        let endLineIndex = -1
+        const endRegex = new RegExp(
+            '^\\s*-\\s*(?:🍅\\s+)?' + lastStartId.toString() + '\\s+end\\b',
+            'i',
+        )
+        const searchEndLimit = nextStartIndex === -1 ? sectionEnd : nextStartIndex
+        for (let i = lastStartIndex + 1; i < searchEndLimit; i++) {
+            if (endRegex.test(lines[i])) {
+                endLineIndex = i
+                break
+            }
+        }
+
+        let blockTailIndex: number
+        if (endLineIndex !== -1) {
+            blockTailIndex = endLineIndex
+        } else if (nextStartIndex !== -1) {
+            blockTailIndex = nextStartIndex
+        } else {
+            blockTailIndex = sectionEnd
+        }
+
+        const isRewardLine = (line: string) =>
+            /^\s*-\s*ARV:/i.test(line) ||
+            /^\s*-\s*avg ARV:/i.test(line) ||
+            /^\s*-\s*avg arv:/i.test(line)
+
+        let i = lastStartIndex + 1
+        while (i < blockTailIndex) {
+            if (isRewardLine(lines[i])) {
+                lines.splice(i, 1)
+                blockTailIndex--
+            } else {
+                i++
+            }
+        }
+
+        if (samples.length === 0) {
+            await app.vault.modify(file, lines.join('\n'))
+            return
+        }
+
+        const arvParts = samples.map((s) => {
+            const tStr = `${s.minutesFromStart}m`
+            return `${s.value}, ${tStr}`
+        })
+        const arvLine = `- ARV: ${arvParts.join('; ')}`
+
+        const avg =
+            samples.reduce((sum, s) => sum + s.value, 0) / samples.length
+        const avgLine = `- avg ARV: ${avg.toFixed(2)}`
+
+        lines.splice(blockTailIndex, 0, arvLine, avgLine)
 
         await app.vault.modify(file, lines.join('\n'))
     }
