@@ -10,6 +10,30 @@ import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
 import { askRewardValue } from 'RewardValueModal'
 
+const NOTE_FREQUENCIES = {
+    C3: 130.81,
+    C5: 523.25,
+    D5: 587.33,
+    E5: 659.25,
+    F5: 698.46,
+} as const
+
+const START_MELODY = [
+    NOTE_FREQUENCIES.C5,
+    NOTE_FREQUENCIES.D5,
+    NOTE_FREQUENCIES.E5,
+    NOTE_FREQUENCIES.F5,
+]
+
+const END_MELODY = [
+    NOTE_FREQUENCIES.F5,
+    NOTE_FREQUENCIES.E5,
+    NOTE_FREQUENCIES.D5,
+    NOTE_FREQUENCIES.C5,
+]
+
+const LOW_DO_FREQUENCY = NOTE_FREQUENCIES.C3
+
 export type Mode = 'WORK' | 'BREAK'
 
 export type TimerRemained = {
@@ -68,10 +92,6 @@ export type TimerStore = TimerState & {
 
 export default class Timer implements Readable<TimerStore> {
     static DEFAULT_NOTIFICATION_AUDIO = new Audio(DEFAULT_NOTIFICATION)
-    // Separate audio clip for ARV reward reminders (piano-like timbre).
-    static REWARD_NOTIFICATION_AUDIO = new Audio(
-        'https://assets.mixkit.co/active_storage/sfx/473/473-preview.mp3',
-    )
 
     private plugin: PomodoroTimerPlugin
 
@@ -90,6 +110,10 @@ export default class Timer implements Readable<TimerStore> {
     public subscribe
 
     private rewardTimeout: number | null = null
+
+    private audioContext: AudioContext | null = null
+
+    private rewardReminderCount = 0
 
     constructor(plugin: PomodoroTimerPlugin) {
         this.plugin = plugin
@@ -171,7 +195,10 @@ export default class Timer implements Readable<TimerStore> {
 
         this.clearRewardTimeout()
 
-        const delayMinutes = 3 + Math.random() * 3
+        const isFirstReminder = this.rewardReminderCount === 0
+        const minDelay = isFirstReminder ? 2 : 3
+        const maxDelay = isFirstReminder ? 3 : 6
+        const delayMinutes = minDelay + Math.random() * (maxDelay - minDelay)
         const delayMillis = Math.round(delayMinutes * 60 * 1000)
         this.rewardTimeout = window.setTimeout(() => {
             void this.handleRewardReminder()
@@ -214,6 +241,8 @@ export default class Timer implements Readable<TimerStore> {
     private async handleRewardReminder() {
         // This is always called from a timeout callback.
         this.rewardTimeout = null
+
+        this.rewardReminderCount++
 
         const settings = this.plugin.getSettings()
         if (
@@ -270,6 +299,10 @@ export default class Timer implements Readable<TimerStore> {
                 body: text,
                 silent: true,
             })
+            sysNotification.on('click', () => {
+                this.focusObsidianWindow()
+                sysNotification.close()
+            })
             sysNotification.show()
         } else {
             new Notice(text)
@@ -316,6 +349,7 @@ export default class Timer implements Readable<TimerStore> {
                 s.startTime = now
                 s.rewardExpected = null
                 s.rewardSamples = []
+                this.rewardReminderCount = 0
                 isNewSession = true
             }
             s.inSession = true
@@ -348,6 +382,10 @@ export default class Timer implements Readable<TimerStore> {
                     })
                     this.scheduleRewardReminder()
                 }
+            }
+
+            if (this.state.mode === 'WORK' && settings.notificationSound) {
+                this.playAudio('START')
             }
 
             const ctx = this.createLogContext(this.state)
@@ -391,6 +429,7 @@ export default class Timer implements Readable<TimerStore> {
                 silent: true,
             })
             sysNotification.on('click', () => {
+                this.focusObsidianWindow()
                 if (logFile) {
                     this.plugin.app.workspace.getLeaf('split').openFile(logFile)
                 }
@@ -410,7 +449,32 @@ export default class Timer implements Readable<TimerStore> {
         }
 
         if (this.plugin.getSettings().notificationSound) {
-            this.playAudio()
+            this.playAudio('END')
+        }
+    }
+
+    private focusObsidianWindow() {
+        try {
+            const electron = require('electron') as any
+            const remote = electron?.remote
+            if (!remote) {
+                return
+            }
+            const currentWindow =
+                remote.getCurrentWindow?.() ??
+                remote.BrowserWindow?.getFocusedWindow?.()
+            const targetWindow =
+                currentWindow ??
+                (remote.BrowserWindow?.getAllWindows?.() || [])[0]
+            if (targetWindow) {
+                if (targetWindow.isMinimized()) {
+                    targetWindow.restore()
+                }
+                targetWindow.show()
+                targetWindow.focus()
+            }
+        } catch (error) {
+            console.warn('Failed to focus Obsidian window', error)
         }
     }
 
@@ -472,28 +536,114 @@ export default class Timer implements Readable<TimerStore> {
         this.state.running ? this.pause() : this.start()
     }
 
-    public playAudio() {
-        let audio = Timer.DEFAULT_NOTIFICATION_AUDIO
-        let customSound = this.plugin.getSettings().customSound
-        if (customSound) {
-            const soundFile =
-                this.plugin.app.vault.getAbstractFileByPath(customSound)
-            if (soundFile && soundFile instanceof TFile) {
-                const soundSrc =
-                    this.plugin.app.vault.getResourcePath(soundFile)
-                audio = new Audio(soundSrc)
-            }
+    public playAudio(kind: 'START' | 'END' = 'END') {
+        const customSound = this.plugin.getSettings().customSound
+        if (customSound && this.playCustomSound(customSound)) {
+            return
         }
-        // Restart from the beginning for short notification clips.
-        audio.currentTime = 0
-        audio.play()
+
+        const melody = kind === 'START' ? START_MELODY : END_MELODY
+        const played = this.playPianoMelody(melody, {
+            noteDuration: 0.28,
+            gap: 0.04,
+            volume: 0.22,
+        })
+
+        if (!played) {
+            this.playDefaultAudioClip()
+        }
     }
 
     public playRewardAudio() {
-        const audio = Timer.REWARD_NOTIFICATION_AUDIO
-        // Always restart from the beginning for reward reminders.
+        const played = this.playPianoMelody([LOW_DO_FREQUENCY], {
+            noteDuration: 0.8,
+            gap: 0,
+            volume: 0.28,
+        })
+
+        if (!played) {
+            this.playDefaultAudioClip()
+        }
+    }
+
+    private playCustomSound(path: string): boolean {
+        const soundFile =
+            this.plugin.app.vault.getAbstractFileByPath(path)
+        if (soundFile && soundFile instanceof TFile) {
+            const soundSrc = this.plugin.app.vault.getResourcePath(soundFile)
+            const audio = new Audio(soundSrc)
+            audio.currentTime = 0
+            void audio.play()
+            return true
+        }
+        return false
+    }
+
+    private playDefaultAudioClip() {
+        const audio = Timer.DEFAULT_NOTIFICATION_AUDIO
         audio.currentTime = 0
-        audio.play()
+        void audio.play()
+    }
+
+    private getAudioContext(): AudioContext | null {
+        if (typeof window === 'undefined') {
+            return null
+        }
+
+        const AudioCtor =
+            window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtor) {
+            return null
+        }
+
+        if (!this.audioContext) {
+            this.audioContext = new AudioCtor()
+        }
+
+        if (this.audioContext.state === 'suspended') {
+            void this.audioContext.resume().catch(() => {
+                /* noop */
+            })
+        }
+
+        return this.audioContext
+    }
+
+    private playPianoMelody(
+        notes: number[],
+        options?: { noteDuration?: number; gap?: number; volume?: number },
+    ): boolean {
+        const ctx = this.getAudioContext()
+        if (!ctx) {
+            return false
+        }
+
+        const duration = options?.noteDuration ?? 0.35
+        const gap = options?.gap ?? 0.05
+        const volume = options?.volume ?? 0.25
+        const startAt = ctx.currentTime
+
+        notes.forEach((frequency, index) => {
+            const noteStart = startAt + index * (duration + gap)
+            const oscillator = ctx.createOscillator()
+            oscillator.type = 'triangle'
+            oscillator.frequency.setValueAtTime(frequency, noteStart)
+
+            const gainNode = ctx.createGain()
+            gainNode.gain.setValueAtTime(volume, noteStart)
+            gainNode.gain.exponentialRampToValueAtTime(
+                0.0001,
+                noteStart + duration,
+            )
+
+            oscillator.connect(gainNode)
+            gainNode.connect(ctx.destination)
+
+            oscillator.start(noteStart)
+            oscillator.stop(noteStart + duration + gap)
+        })
+
+        return true
     }
 
     public setupTimer() {

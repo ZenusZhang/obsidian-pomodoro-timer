@@ -120,8 +120,8 @@ export default class Logger {
      *   - Both ARV and avg ARV lines are inserted before the matching
      *     "end" line so that the visual order is:
      *         - 🍅 1 start ...
-     *         > ARV: ...
-     *         > avg ARV: ...
+     *           ARV: ...
+     *           avg ARV: ...
      *         - 1 end ...
      */
     public async updateRewardTracking(ctx: LogContext): Promise<void> {
@@ -431,9 +431,8 @@ export default class Logger {
         }
 
         const isRewardLine = (line: string) =>
-            /^\s*[>-]\s*ARV:/i.test(line) ||
-            /^\s*[>-]\s*avg ARV:/i.test(line) ||
-            /^\s*[>-]\s*avg arv:/i.test(line)
+            /^\s*(?:[>-]\s*)?ARV:/i.test(line) ||
+            /^\s*(?:[>-]\s*)?avg\s+ARV:/i.test(line)
 
         let i = lastStartIndex + 1
         while (i < blockTailIndex) {
@@ -454,7 +453,7 @@ export default class Logger {
             const tStr = `${s.minutesFromStart}m`
             return `${s.value}, ${tStr}`
         })
-        const arvLine = `> ARV: ${arvParts.join('; ')}`
+        const arvLine = ` ARV: ${arvParts.join('; ')}`
 
         // Only show the average once the pomodoro has an explicit "end" line.
         const insertIndex = blockTailIndex
@@ -462,7 +461,7 @@ export default class Logger {
         if (hasEndLine) {
             const avg =
                 samples.reduce((sum, s) => sum + s.value, 0) / samples.length
-            const avgLine = `> avg ARV: ${avg.toFixed(2)}`
+            const avgLine = ` avg ARV: ${avg.toFixed(2)}`
 
             lines.splice(insertIndex, 0, arvLine, avgLine)
         } else {
