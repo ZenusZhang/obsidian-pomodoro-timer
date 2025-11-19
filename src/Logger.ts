@@ -337,7 +337,7 @@ export default class Logger {
             if (t.path && t.blockLink) {
                 const linkPath = t.path.replace(/\.md$/i, '')
                 const blockRef = t.blockLink.trim() // "^abcd"
-                const alias = t.name || t.description || linkPath
+                const alias = '⏹'
                 superLink = ` [[${linkPath}#${blockRef}|${alias}]]`
             }
         }

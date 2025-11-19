@@ -6,12 +6,14 @@ import type { Readable } from 'svelte/store'
 import { Notice, TFile } from 'obsidian'
 import Logger, { type LogContext } from 'Logger'
 import DEFAULT_NOTIFICATION from 'Notification'
+import REWARD_NOTIFICATION from 'RewardNotification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
 import { askRewardValue } from 'RewardValueModal'
 
 const NOTE_FREQUENCIES = {
     C3: 130.81,
+    C4: 261.63,
     C5: 523.25,
     D5: 587.33,
     E5: 659.25,
@@ -32,7 +34,7 @@ const END_MELODY = [
     NOTE_FREQUENCIES.C5,
 ]
 
-const LOW_DO_FREQUENCY = NOTE_FREQUENCIES.C3
+const STANDARD_DO_FREQUENCY = NOTE_FREQUENCIES.C4
 
 export type Mode = 'WORK' | 'BREAK'
 
@@ -92,6 +94,7 @@ export type TimerStore = TimerState & {
 
 export default class Timer implements Readable<TimerStore> {
     static DEFAULT_NOTIFICATION_AUDIO = new Audio(DEFAULT_NOTIFICATION)
+    static REWARD_NOTIFICATION_AUDIO = new Audio(REWARD_NOTIFICATION)
 
     private plugin: PomodoroTimerPlugin
 
@@ -555,10 +558,31 @@ export default class Timer implements Readable<TimerStore> {
     }
 
     public playRewardAudio() {
-        const played = this.playPianoMelody([LOW_DO_FREQUENCY], {
-            noteDuration: 0.8,
+        const rewardAudio = Timer.REWARD_NOTIFICATION_AUDIO
+        if (rewardAudio) {
+            rewardAudio.currentTime = 0
+            rewardAudio.volume = 0.7
+            try {
+                const playPromise = rewardAudio.play()
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    void playPromise.catch(() => {
+                        this.playFallbackRewardTone()
+                    })
+                }
+                return
+            } catch (error) {
+                console.warn('Failed to play reward audio sample', error)
+            }
+        }
+
+        this.playFallbackRewardTone()
+    }
+
+    private playFallbackRewardTone() {
+        const played = this.playPianoMelody([STANDARD_DO_FREQUENCY], {
+            noteDuration: 0.85,
             gap: 0,
-            volume: 0.28,
+            volume: 0.3,
         })
 
         if (!played) {
