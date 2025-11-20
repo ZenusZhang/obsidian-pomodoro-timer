@@ -353,7 +353,18 @@ export default class Logger {
             erv = ` ERV: ${(ctx as any).rewardExpected}`
         }
 
-        const line = `- ${emojiPrefix}${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}${erv}`
+        let descriptionSegment = ''
+        if (kind === 'START') {
+            const rawDescription = String(
+                (ctx as any).sessionDescription ?? '',
+            )
+            const normalized = rawDescription.replace(/\s+/g, ' ').trim()
+            if (normalized.length > 0) {
+                descriptionSegment = ` 内容: ${normalized}`
+            }
+        }
+
+        const line = `- ${emojiPrefix}${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}${descriptionSegment}${erv}`
 
         // Insert at the end of the section (just before the next header or EOF).
         lines.splice(sectionEnd, 0, line)

@@ -10,6 +10,8 @@ import REWARD_NOTIFICATION from 'RewardNotification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
 import { askRewardValue } from 'RewardValueModal'
+import { askPomodoroStartInfo } from 'PomodoroStartModal'
+import { askForTimerLength } from 'TimerLengthModal'
 
 const NOTE_FREQUENCIES = {
     C3: 130.81,
@@ -85,6 +87,7 @@ export type TimerState = {
     duration: number
     rewardExpected: number | null
     rewardSamples: RewardSample[]
+    sessionDescription: string
 }
 
 export type TimerStore = TimerState & {
@@ -136,6 +139,7 @@ export default class Timer implements Readable<TimerStore> {
             count,
             rewardExpected: null,
             rewardSamples: [],
+            sessionDescription: '',
         }
 
         let store = writable(this.state)
@@ -352,6 +356,7 @@ export default class Timer implements Readable<TimerStore> {
                 s.startTime = now
                 s.rewardExpected = null
                 s.rewardSamples = []
+                s.sessionDescription = ''
                 this.rewardReminderCount = 0
                 isNewSession = true
             }
@@ -365,26 +370,37 @@ export default class Timer implements Readable<TimerStore> {
         })
         if (isNewSession) {
             const settings = this.plugin.getSettings()
-            let expected: number | null = null
-
             const shouldAskReward =
                 settings.rewardValueRecord &&
                 settings.logFormat === 'POMODORO_SECTION' &&
                 this.state.mode === 'WORK'
+            const shouldPromptForDetails =
+                settings.logFormat === 'POMODORO_SECTION' &&
+                this.state.mode === 'WORK'
 
-            if (shouldAskReward) {
-                expected = await askRewardValue(
-                    this.plugin.app,
-                    'EXPECTED',
-                    null,
-                )
-                if (expected != null) {
-                    this.update((state) => {
-                        state.rewardExpected = expected
-                        return state
-                    })
-                    this.scheduleRewardReminder()
+            let expected: number | null = null
+            let sessionDescription = ''
+
+            if (shouldPromptForDetails) {
+                const result = await askPomodoroStartInfo(this.plugin.app, {
+                    includeRewardInput: shouldAskReward,
+                })
+                sessionDescription = result.description ?? ''
+                if (shouldAskReward) {
+                    expected = result.expectedReward
                 }
+            }
+
+            this.update((state) => {
+                if (shouldPromptForDetails) {
+                    state.sessionDescription = sessionDescription
+                }
+                state.rewardExpected = shouldAskReward ? expected ?? null : null
+                return state
+            })
+
+            if (shouldAskReward && expected != null) {
+                this.scheduleRewardReminder()
             }
 
             if (this.state.mode === 'WORK' && settings.notificationSound) {
@@ -532,6 +548,41 @@ export default class Timer implements Readable<TimerStore> {
                 callback(updated)
             }
             return updated
+        })
+    }
+
+    public async promptForTimerLength() {
+        const remainingMillis = Math.max(0, this.state.count - this.state.elapsed)
+        const remainingMinutes =
+            Math.round((remainingMillis / 60000) * 10) / 10
+        const initialMinutes = this.state.inSession
+            ? remainingMinutes
+            : this.state.duration
+        const result = await askForTimerLength(this.plugin.app, {
+            initialMinutes: Number.isFinite(initialMinutes)
+                ? initialMinutes
+                : 0,
+            minMinutes: 0,
+        })
+        if (result == null) {
+            return
+        }
+        const sanitized = Math.max(0, result)
+        this.update((state) => {
+            const elapsedMinutes = state.elapsed / 60000
+            if (state.inSession) {
+                const totalMinutes = sanitized + elapsedMinutes
+                state.duration = totalMinutes
+                state.count = Math.max(0, Math.round(totalMinutes * 60 * 1000))
+                if (state.elapsed > state.count) {
+                    state.elapsed = state.count
+                }
+            } else {
+                state.duration = sanitized
+                state.count = Math.max(0, Math.round(sanitized * 60 * 1000))
+                state.elapsed = 0
+            }
+            return state
         })
     }
 

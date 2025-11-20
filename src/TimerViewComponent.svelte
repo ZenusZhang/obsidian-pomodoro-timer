@@ -26,8 +26,8 @@ const start = () => {
         timer.reset()
     }
 
-const toggleTimer = () => {
-    timer.toggleTimer()
+const configureTimerLength = () => {
+    timer.promptForTimerLength()
 }
 
 const toggleMode = () => {
@@ -61,7 +61,7 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
                     {/if}
                     <span></span>
                 </div>
-                <div on:click={toggleTimer} class="control">
+                <div on:click={configureTimerLength} class="control">
                     <span class="timer-text">
                         {$timer.remained.human}
                     </span>
