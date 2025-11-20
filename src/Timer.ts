@@ -45,7 +45,7 @@ export type TimerRemained = {
     human: string
 }
 
-type RewardSample = {
+type TimedSample = {
     value: number
     minutesFromStart: number
 }
@@ -86,7 +86,8 @@ export type TimerState = {
     count: number
     duration: number
     rewardExpected: number | null
-    rewardSamples: RewardSample[]
+    rewardSamples: TimedSample[]
+    energySamples: TimedSample[]
     sessionDescription: string
 }
 
@@ -115,11 +116,11 @@ export default class Timer implements Readable<TimerStore> {
 
     public subscribe
 
-    private rewardTimeout: number | null = null
+    private randomPromptTimeout: number | null = null
 
     private audioContext: AudioContext | null = null
 
-    private rewardReminderCount = 0
+    private randomPromptCount = 0
 
     constructor(plugin: PomodoroTimerPlugin) {
         this.plugin = plugin
@@ -139,6 +140,7 @@ export default class Timer implements Readable<TimerStore> {
             count,
             rewardExpected: null,
             rewardSamples: [],
+            energySamples: [],
             sessionDescription: '',
         }
 
@@ -176,39 +178,59 @@ export default class Timer implements Readable<TimerStore> {
         }
     }
 
+    private minutesFromSessionStart(referenceTime: number = Date.now()): number {
+        if (this.state.startTime != null) {
+            return (
+                Math.round(
+                    ((referenceTime - this.state.startTime) / 60000) * 10,
+                ) / 10
+            )
+        }
+        if (this.state.elapsed > 0) {
+            return Math.round((this.state.elapsed / 60000) * 10) / 10
+        }
+        return 0
+    }
+
     private toMillis(minutes: number) {
         return minutes * 60 * 1000
     }
 
-    private clearRewardTimeout() {
-        if (this.rewardTimeout != null) {
-            window.clearTimeout(this.rewardTimeout)
-            this.rewardTimeout = null
+    private clearRandomPromptTimeout() {
+        if (this.randomPromptTimeout != null) {
+            window.clearTimeout(this.randomPromptTimeout)
+            this.randomPromptTimeout = null
         }
     }
 
-    private scheduleRewardReminder() {
+    private scheduleRandomPrompt() {
         const settings = this.plugin.getSettings()
         if (
-            !settings.rewardValueRecord ||
-            settings.logFormat !== 'POMODORO_SECTION'
+            settings.logFormat !== 'POMODORO_SECTION' ||
+            !this.state.inSession ||
+            this.state.mode !== 'WORK'
         ) {
             return
         }
 
-        if (!this.state.inSession || this.state.mode !== 'WORK') {
+        const shouldTrackReward =
+            settings.rewardValueRecord && this.state.rewardExpected != null
+        const shouldTrackEnergy =
+            settings.energyLevelRecord && this.state.energySamples.length > 0
+
+        if (!shouldTrackReward && !shouldTrackEnergy) {
             return
         }
 
-        this.clearRewardTimeout()
+        this.clearRandomPromptTimeout()
 
-        const isFirstReminder = this.rewardReminderCount === 0
+        const isFirstReminder = this.randomPromptCount === 0
         const minDelay = isFirstReminder ? 2 : 3
         const maxDelay = isFirstReminder ? 3 : 6
         const delayMinutes = minDelay + Math.random() * (maxDelay - minDelay)
         const delayMillis = Math.round(delayMinutes * 60 * 1000)
-        this.rewardTimeout = window.setTimeout(() => {
-            void this.handleRewardReminder()
+        this.randomPromptTimeout = window.setTimeout(() => {
+            void this.handleRandomPrompt()
         }, delayMillis)
     }
 
@@ -245,64 +267,99 @@ export default class Timer implements Readable<TimerStore> {
         }
     }
 
-    private async handleRewardReminder() {
+    private async handleRandomPrompt() {
         // This is always called from a timeout callback.
-        this.rewardTimeout = null
+        this.randomPromptTimeout = null
 
-        this.rewardReminderCount++
+        this.randomPromptCount++
 
         const settings = this.plugin.getSettings()
         if (
-            !settings.rewardValueRecord ||
-            settings.logFormat !== 'POMODORO_SECTION'
+            settings.logFormat !== 'POMODORO_SECTION' ||
+            !this.state.inSession ||
+            this.state.mode !== 'WORK'
         ) {
             return
         }
 
-        if (!this.state.inSession || this.state.mode !== 'WORK') {
+        const shouldTrackReward =
+            settings.rewardValueRecord && this.state.rewardExpected != null
+        const shouldTrackEnergy =
+            settings.energyLevelRecord && this.state.energySamples.length > 0
+
+        if (!shouldTrackReward && !shouldTrackEnergy) {
             return
         }
 
-        this.notifyRewardReminder()
-
-        const value = await askRewardValue(this.plugin.app, 'ACTUAL')
-        if (value == null) {
-            this.scheduleRewardReminder()
-            return
-        }
-
-        let minutesFromStart = 0
-        if (this.state.startTime != null) {
-            minutesFromStart =
-                Math.round(
-                    ((Date.now() - this.state.startTime) / 60000) * 10,
-                ) / 10
-        } else if (this.state.elapsed > 0) {
-            minutesFromStart =
-                Math.round((this.state.elapsed / 60000) * 10) / 10
-        }
-
-        this.update((state) => {
-            state.rewardSamples.push({ value, minutesFromStart })
-            return state
+        this.notifyRandomPrompt({
+            reward: shouldTrackReward,
+            energy: shouldTrackEnergy,
         })
 
-        const ctx = this.createLogContext(this.state)
-        await this.logger.updateRewardTracking(ctx)
+        if (shouldTrackReward) {
+            const rewardValue = await askRewardValue(
+                this.plugin.app,
+                'ACTUAL',
+            )
+            if (rewardValue != null) {
+                const minutesFromStart = this.minutesFromSessionStart()
+                this.update((state) => {
+                    state.rewardSamples.push({
+                        value: rewardValue,
+                        minutesFromStart,
+                    })
+                    return state
+                })
+                const ctx = this.createLogContext(this.state)
+                await this.logger.updateRewardTracking(ctx)
+            }
+        }
 
-        this.scheduleRewardReminder()
+        if (shouldTrackEnergy) {
+            const energyValue = await askRewardValue(
+                this.plugin.app,
+                'ENERGY',
+            )
+            if (energyValue != null) {
+                const minutesFromStart = this.minutesFromSessionStart()
+                this.update((state) => {
+                    state.energySamples.push({
+                        value: energyValue,
+                        minutesFromStart,
+                    })
+                    return state
+                })
+                const ctx = this.createLogContext(this.state)
+                await this.logger.updateEnergyTracking(ctx)
+            }
+        }
+
+        this.scheduleRandomPrompt()
     }
 
-    private notifyRewardReminder() {
+    private notifyRandomPrompt(options: { reward: boolean; energy: boolean }) {
         const settings = this.plugin.getSettings()
-        const text =
-            '请在 0~5 之间选择你当前的愉悦值（0 表示非常低，5 表示非常高）。'
+        let text = ''
+        if (options.reward && options.energy) {
+            text =
+                '请填写当前愉悦值（0~5）以及当前的电量🔋（0~10）。'
+        } else if (options.reward) {
+            text =
+                '请在 0~5 之间选择你当前的愉悦值（0 表示非常低，5 表示非常高）。'
+        } else {
+            text = '描述你当前的电量🔋(0~10分)。'
+        }
 
         if (settings.useSystemNotification) {
             const Notification = (require('electron') as any).remote
                 .Notification
             const sysNotification = new Notification({
-                title: 'Pomodoro Reward',
+                title:
+                    options.reward && options.energy
+                        ? 'Pomodoro Record'
+                        : options.reward
+                          ? 'Pomodoro Reward'
+                          : 'Energy Level Record',
                 body: text,
                 silent: true,
             })
@@ -340,6 +397,7 @@ export default class Timer implements Readable<TimerStore> {
         }
         await this.logger.logPomodoroEnd(ctx)
         await this.logger.updateRewardTracking(ctx)
+        await this.logger.updateEnergyTracking(ctx)
         const logFile = await this.logger.log(ctx)
         this.notify(ctx, logFile)
     }
@@ -356,8 +414,9 @@ export default class Timer implements Readable<TimerStore> {
                 s.startTime = now
                 s.rewardExpected = null
                 s.rewardSamples = []
+                s.energySamples = []
                 s.sessionDescription = ''
-                this.rewardReminderCount = 0
+                this.randomPromptCount = 0
                 isNewSession = true
             }
             s.inSession = true
@@ -370,24 +429,29 @@ export default class Timer implements Readable<TimerStore> {
         })
         if (isNewSession) {
             const settings = this.plugin.getSettings()
-            const shouldAskReward =
-                settings.rewardValueRecord &&
-                settings.logFormat === 'POMODORO_SECTION' &&
-                this.state.mode === 'WORK'
             const shouldPromptForDetails =
                 settings.logFormat === 'POMODORO_SECTION' &&
                 this.state.mode === 'WORK'
+            const shouldAskReward =
+                settings.rewardValueRecord && shouldPromptForDetails
+            const shouldAskEnergy =
+                settings.energyLevelRecord && shouldPromptForDetails
 
             let expected: number | null = null
+            let initialEnergyLevel: number | null = null
             let sessionDescription = ''
 
             if (shouldPromptForDetails) {
                 const result = await askPomodoroStartInfo(this.plugin.app, {
                     includeRewardInput: shouldAskReward,
+                    includeEnergyInput: shouldAskEnergy,
                 })
                 sessionDescription = result.description ?? ''
                 if (shouldAskReward) {
                     expected = result.expectedReward
+                }
+                if (shouldAskEnergy) {
+                    initialEnergyLevel = result.initialEnergyLevel
                 }
             }
 
@@ -396,11 +460,21 @@ export default class Timer implements Readable<TimerStore> {
                     state.sessionDescription = sessionDescription
                 }
                 state.rewardExpected = shouldAskReward ? expected ?? null : null
+                if (shouldAskEnergy && initialEnergyLevel != null) {
+                    state.energySamples.push({
+                        value: initialEnergyLevel,
+                        minutesFromStart: 0,
+                    })
+                }
                 return state
             })
 
-            if (shouldAskReward && expected != null) {
-                this.scheduleRewardReminder()
+            const canTrackReward = shouldAskReward && expected != null
+            const canTrackEnergy =
+                shouldAskEnergy && initialEnergyLevel != null
+
+            if (canTrackReward || canTrackEnergy) {
+                this.scheduleRandomPrompt()
             }
 
             if (this.state.mode === 'WORK' && settings.notificationSound) {
@@ -408,7 +482,10 @@ export default class Timer implements Readable<TimerStore> {
             }
 
             const ctx = this.createLogContext(this.state)
-            this.logger.logPomodoroStart(ctx)
+            await this.logger.logPomodoroStart(ctx)
+            if (canTrackEnergy) {
+                await this.logger.updateEnergyTracking(ctx)
+            }
         }
     }
 
@@ -423,7 +500,8 @@ export default class Timer implements Readable<TimerStore> {
         state.count = state.duration * 60 * 1000
         state.inSession = false
         state.running = false
-        this.clearRewardTimeout()
+        this.clearRandomPromptTimeout()
+        this.randomPromptCount = 0
         this.clock.postMessage({
             start: false,
             lowFps: this.plugin.getSettings().lowFps,
@@ -522,7 +600,7 @@ export default class Timer implements Readable<TimerStore> {
             state.count = state.duration * 60 * 1000
             state.inSession = false
             state.running = false
-            this.clearRewardTimeout()
+            this.clearRandomPromptTimeout()
 
             if (!this.plugin.tracker!.pinned) {
                 this.plugin.tracker!.clear()
@@ -552,6 +630,9 @@ export default class Timer implements Readable<TimerStore> {
     }
 
     public async promptForTimerLength() {
+        if (this.state.running) {
+            return
+        }
         const remainingMillis = Math.max(0, this.state.count - this.state.elapsed)
         const remainingMinutes =
             Math.round((remainingMillis / 60000) * 10) / 10
@@ -581,6 +662,13 @@ export default class Timer implements Readable<TimerStore> {
                 state.duration = sanitized
                 state.count = Math.max(0, Math.round(sanitized * 60 * 1000))
                 state.elapsed = 0
+                if (state.mode === 'WORK') {
+                    state.workLen = sanitized
+                    this.plugin.updateSettings({ workLen: sanitized })
+                } else {
+                    state.breakLen = sanitized
+                    this.plugin.updateSettings({ breakLen: sanitized })
+                }
             }
             return state
         })
@@ -739,7 +827,7 @@ export default class Timer implements Readable<TimerStore> {
 
     public destroy() {
         this.pause()
-        this.clearRewardTimeout()
+        this.clearRandomPromptTimeout()
         this.clock?.terminate()
         for (let unsub of this.unsubscribers) {
             unsub()

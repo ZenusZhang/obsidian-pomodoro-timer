@@ -3,22 +3,28 @@ import { App, Modal } from 'obsidian'
 export interface PomodoroStartModalResult {
     description: string
     expectedReward: number | null
+    initialEnergyLevel: number | null
 }
 
 export interface PomodoroStartModalOptions {
     includeRewardInput: boolean
+    includeEnergyInput: boolean
     initialDescription?: string
     initialExpectedReward?: number | null
+    initialEnergyLevel?: number | null
 }
 
 class PomodoroStartModal extends Modal {
     private readonly includeRewardInput: boolean
+    private readonly includeEnergyInput: boolean
     private readonly initialDescription: string
     private readonly initialExpectedReward: number | null
+    private readonly initialEnergyLevel: number | null
     private readonly onSubmit: (result: PomodoroStartModalResult) => void
 
     private descriptionInput!: HTMLTextAreaElement
     private rewardInput: HTMLInputElement | null = null
+    private energyInput: HTMLInputElement | null = null
     private resolved = false
 
     constructor(
@@ -28,8 +34,10 @@ class PomodoroStartModal extends Modal {
     ) {
         super(app)
         this.includeRewardInput = options.includeRewardInput
+        this.includeEnergyInput = options.includeEnergyInput
         this.initialDescription = options.initialDescription ?? ''
         this.initialExpectedReward = options.initialExpectedReward ?? null
+        this.initialEnergyLevel = options.initialEnergyLevel ?? null
         this.onSubmit = onSubmit
     }
 
@@ -72,6 +80,27 @@ class PomodoroStartModal extends Modal {
             }
         }
 
+        if (this.includeEnergyInput) {
+            const energySection = contentEl.createDiv({
+                cls: 'pomodoro-start-section',
+            })
+            energySection.createEl('div', {
+                text: '描述你当前的电量🔋(0~10分)',
+            })
+            const energyWrapper = energySection.createDiv({
+                cls: 'reward-input-wrapper',
+            })
+            this.energyInput = energyWrapper.createEl('input', {
+                type: 'number',
+            })
+            this.energyInput.min = '0'
+            this.energyInput.max = '10'
+            this.energyInput.step = '0.5'
+            if (this.initialEnergyLevel != null) {
+                this.energyInput.value = `${this.initialEnergyLevel}`
+            }
+        }
+
         const buttonRow = contentEl.createDiv({
             cls: 'pomodoro-start-buttons',
         })
@@ -81,9 +110,15 @@ class PomodoroStartModal extends Modal {
 
         const skipButton = buttonRow.createEl('button', { text: '跳过' })
         skipButton.addEventListener('click', () => {
+            if (!this.confirmSkipIfIncomplete()) {
+                return
+            }
             this.descriptionInput.value = ''
             if (this.rewardInput) {
                 this.rewardInput.value = ''
+            }
+            if (this.energyInput) {
+                this.energyInput.value = ''
             }
             this.submit()
         })
@@ -104,12 +139,23 @@ class PomodoroStartModal extends Modal {
             rewardValue != null && !Number.isNaN(rewardValue)
                 ? Math.max(0, Math.min(5, rewardValue))
                 : null
+        const energyValue =
+            this.energyInput && this.energyInput.value.length > 0
+                ? Number(this.energyInput.value)
+                : null
+        const sanitizedEnergy =
+            energyValue != null && !Number.isNaN(energyValue)
+                ? Math.max(0, Math.min(10, energyValue))
+                : null
 
         this.resolved = true
         this.onSubmit({
             description,
             expectedReward: this.includeRewardInput
                 ? sanitizedReward
+                : null,
+            initialEnergyLevel: this.includeEnergyInput
+                ? sanitizedEnergy
                 : null,
         })
         this.close()
@@ -121,8 +167,25 @@ class PomodoroStartModal extends Modal {
             this.onSubmit({
                 description: '',
                 expectedReward: null,
+                initialEnergyLevel: null,
             })
         }
+    }
+
+    private confirmSkipIfIncomplete(): boolean {
+        const fields: string[] = []
+        fields.push(this.descriptionInput.value?.trim() ?? '')
+        if (this.includeRewardInput) {
+            fields.push(this.rewardInput?.value?.trim() ?? '')
+        }
+        if (this.includeEnergyInput) {
+            fields.push(this.energyInput?.value?.trim() ?? '')
+        }
+        const hasEmpty = fields.some((value) => value.length === 0)
+        if (!hasEmpty) {
+            return true
+        }
+        return window.confirm('仍有未填写的内容，确定要跳过吗？')
     }
 }
 

@@ -153,7 +153,43 @@ export default class Logger {
             return
         }
 
-        await this.updatePomodoroSectionRewardLines(logFile, samples)
+        await this.updatePomodoroSectionMetricLine(logFile, samples, 'ARV:')
+    }
+
+    public async updateEnergyTracking(ctx: LogContext): Promise<void> {
+        const settings = this.plugin.getSettings()
+
+        if (settings.logFormat !== 'POMODORO_SECTION') {
+            return
+        }
+
+        if (!settings.energyLevelRecord) {
+            return
+        }
+
+        if (settings.logLevel !== 'ALL' && settings.logLevel !== ctx.mode) {
+            return
+        }
+
+        if (ctx.mode !== 'WORK') {
+            return
+        }
+
+        const samples =
+            (ctx as any).energySamples as
+                | { value: number; minutesFromStart: number }[]
+                | undefined
+
+        if (!samples || samples.length === 0) {
+            return
+        }
+
+        const logFile = await this.resolveLogFile(ctx)
+        if (!logFile) {
+            return
+        }
+
+        await this.updatePomodoroSectionMetricLine(logFile, samples, '🔋:')
     }
 
     public async log(ctx: LogContext): Promise<TFile | void> {
@@ -242,8 +278,8 @@ export default class Logger {
      * of the given file.
      *
      * The format is:
-     *   - 🍅 {pomo_id} start HH:mm [[file#^blockId|task description]] ERV: e
-     *   - {pomo_id} end   HH:mm
+     *   🍅 {pomo_id} start HH:mm [[file#^blockId|task description]] ERV: e
+     *   {pomo_id} end   HH:mm
      *
      * Where:
      *   - pomo_id is the N-th pomodoro in this file (counted by "start" lines)
@@ -289,7 +325,7 @@ export default class Logger {
             }
         }
 
-        const idRegex = /^\s*-\s*(?:🍅\s+)?(\d+)\s+(start|end)\b/i
+        const idRegex = /^\s*(?:-\s*)?(?:🍅\s+)?(\d+)\s+(start|end)\b/i
         let maxStartId = 0
         let maxEndId = 0
 
@@ -364,7 +400,21 @@ export default class Logger {
             }
         }
 
-        const line = `- ${emojiPrefix}${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}${descriptionSegment}${erv}`
+        let avgSegment = ''
+        if (kind === 'END') {
+            const rewardSamples =
+                (ctx as any).rewardSamples as
+                    | { value: number; minutesFromStart: number }[]
+                    | undefined
+            if (rewardSamples && rewardSamples.length > 0) {
+                const avg =
+                    rewardSamples.reduce((sum, sample) => sum + sample.value, 0) /
+                    rewardSamples.length
+                avgSegment = ` avg ARV: ${avg.toFixed(2)}`
+            }
+        }
+
+        const line = `${emojiPrefix}${pomoId} ${kind.toLowerCase()} ${timeStr}${superLink}${descriptionSegment}${erv}${avgSegment}`
 
         // Insert at the end of the section (just before the next header or EOF).
         lines.splice(sectionEnd, 0, line)
@@ -372,16 +422,17 @@ export default class Logger {
         await app.vault.modify(file, lines.join('\n'))
     }
 
-    private async updatePomodoroSectionRewardLines(
+    private async updatePomodoroSectionMetricLine(
         file: TFile,
         samples: { value: number; minutesFromStart: number }[],
+        label: string,
     ): Promise<void> {
         const app = this.plugin.app
         const content = await app.vault.read(file)
         const lines = content.split('\n')
 
         const headerRegex = /^#{1,6}\s+Pomodoro Section\s*$/i
-        const startRegex = /^\s*-\s*(?:🍅\s+)?(\d+)\s+start\b/i
+        const startRegex = /^\s*(?:-\s*)?(?:🍅\s+)?(\d+)\s+start\b/i
 
         let headerIndex = lines.findIndex((line) => headerRegex.test(line))
         if (headerIndex === -1) {
@@ -410,17 +461,20 @@ export default class Logger {
             return
         }
 
-        let nextStartIndex = -1
-        for (let i = lastStartIndex + 1; i < sectionEnd; i++) {
-            if (startRegex.test(lines[i])) {
-                nextStartIndex = i
-                break
+        const nextStartIndex = (() => {
+            for (let i = lastStartIndex + 1; i < sectionEnd; i++) {
+                if (startRegex.test(lines[i])) {
+                    return i
+                }
             }
-        }
+            return -1
+        })()
 
         let endLineIndex = -1
         const endRegex = new RegExp(
-            '^\\s*-\\s*(?:🍅\\s+)?' + lastStartId.toString() + '\\s+end\\b',
+            '^\\s*(?:-\\s*)?(?:🍅\\s+)?' +
+                lastStartId.toString() +
+                '\\s+end\\b',
             'i',
         )
         const searchEndLimit = nextStartIndex === -1 ? sectionEnd : nextStartIndex
@@ -432,7 +486,6 @@ export default class Logger {
         }
 
         let blockTailIndex: number
-        const hasEndLine = endLineIndex !== -1
         if (endLineIndex !== -1) {
             blockTailIndex = endLineIndex
         } else if (nextStartIndex !== -1) {
@@ -441,13 +494,22 @@ export default class Logger {
             blockTailIndex = sectionEnd
         }
 
-        const isRewardLine = (line: string) =>
-            /^\s*(?:[>-]\s*)?ARV:/i.test(line) ||
-            /^\s*(?:[>-]\s*)?avg\s+ARV:/i.test(line)
+        const escapedLabel = this.escapeForRegex(label)
+        const metricRegex = new RegExp(
+            '^\\s*(?:-\\s*)?' + escapedLabel,
+            'i',
+        )
+        const legacyAvgRegex =
+            label === 'ARV:'
+                ? /^\s*(?:-\s*)?avg\s+ARV:/i
+                : null
 
         let i = lastStartIndex + 1
         while (i < blockTailIndex) {
-            if (isRewardLine(lines[i])) {
+            if (
+                metricRegex.test(lines[i]) ||
+                (legacyAvgRegex && legacyAvgRegex.test(lines[i]))
+            ) {
                 lines.splice(i, 1)
                 blockTailIndex--
             } else {
@@ -460,27 +522,19 @@ export default class Logger {
             return
         }
 
-        const arvParts = samples.map((s) => {
+        const parts = samples.map((s) => {
             const tStr = `${s.minutesFromStart}m`
             return `${s.value}, ${tStr}`
         })
-        const arvLine = ` ARV: ${arvParts.join('; ')}`
 
-        // Only show the average once the pomodoro has an explicit "end" line.
-        const insertIndex = blockTailIndex
-
-        if (hasEndLine) {
-            const avg =
-                samples.reduce((sum, s) => sum + s.value, 0) / samples.length
-            const avgLine = ` avg ARV: ${avg.toFixed(2)}`
-
-            lines.splice(insertIndex, 0, arvLine, avgLine)
-        } else {
-            // Session is still running – update only the ARV series.
-            lines.splice(insertIndex, 0, arvLine)
-        }
+        const metricLine = `- ${label} ${parts.join('; ')}`
+        lines.splice(blockTailIndex, 0, metricLine)
 
         await app.vault.modify(file, lines.join('\n'))
+    }
+
+    private escapeForRegex(text: string): string {
+        return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     }
 
     private async toText(log: TimerLog, file: TFile): Promise<string> {

@@ -33,6 +33,7 @@ export interface Settings {
     taskFormat: TaskFormat
     lowFps: boolean
     rewardValueRecord: boolean
+    energyLevelRecord: boolean
 }
 
 export default class PomodoroSettings extends PluginSettingTab {
@@ -55,6 +56,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         taskFormat: 'TASKS',
         lowFps: false,
         rewardValueRecord: false,
+        energyLevelRecord: false,
     }
 
     static settings: Writable<Settings> = writable(

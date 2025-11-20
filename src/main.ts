@@ -90,6 +90,10 @@ export default class PomodoroTimerPlugin extends Plugin {
         )
     }
 
+    public updateSettings(partial: Partial<Settings>) {
+        this.settingTab?.updateSettings(partial)
+    }
+
     onunload() {
         this.settingTab?.unload()
         this.timer?.destroy()

@@ -27,6 +27,9 @@ const start = () => {
     }
 
 const configureTimerLength = () => {
+    if ($timer.running) {
+        return
+    }
     timer.promptForTimerLength()
 }
 
@@ -61,7 +64,12 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
                     {/if}
                     <span></span>
                 </div>
-                <div on:click={configureTimerLength} class="control">
+                <div
+                    on:click={configureTimerLength}
+                    class="control"
+                    class:disabled={$timer.running}
+                    aria-disabled={$timer.running}
+                >
                     <span class="timer-text">
                         {$timer.remained.human}
                     </span>
@@ -267,6 +275,12 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
 
 .control {
     cursor: pointer;
+}
+
+.control.disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .control:hover {
