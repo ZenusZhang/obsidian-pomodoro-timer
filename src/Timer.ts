@@ -12,6 +12,7 @@ import type { TaskItem } from 'Tasks'
 import { askRewardAndEnergy, askRewardValue } from 'RewardValueModal'
 import { askPomodoroStartInfo } from 'PomodoroStartModal'
 import { askForTimerLength } from 'TimerLengthModal'
+import { formatMinutesAsClock } from 'utils'
 
 const NOTE_FREQUENCIES = {
     C3: 130.81,
@@ -369,7 +370,7 @@ export default class Timer implements Readable<TimerStore> {
         let text = ''
         if (options.reward && options.energy) {
             text =
-                '请填写当前愉悦值（0~5）以及当前的电量🔋（0~10）。'
+                '请在 0~5 之间选择你当前的愉悦值。请填写当前的电量🔋(0~10分)。'
         } else if (options.reward) {
             text =
                 '请在 0~5 之间选择你当前的愉悦值（0 表示非常低，5 表示非常高）。'
@@ -540,9 +541,10 @@ export default class Timer implements Readable<TimerStore> {
 
     private notify(state: TimerState, logFile: TFile | void) {
         const emoji = state.mode == 'WORK' ? '🍅' : '🥤'
+        const durationText = formatMinutesAsClock(state.duration)
         const text = `${emoji} You have been ${
             state.mode === 'WORK' ? 'working' : 'breaking'
-        } for ${state.duration} minutes.`
+        } for ${durationText}.`
 
         if (this.plugin.getSettings().useSystemNotification) {
             const Notification = (require('electron') as any).remote
@@ -729,7 +731,7 @@ export default class Timer implements Readable<TimerStore> {
         const rewardAudio = Timer.REWARD_NOTIFICATION_AUDIO
         if (rewardAudio) {
             rewardAudio.currentTime = 0
-            rewardAudio.volume = 0.7
+            rewardAudio.volume = 1
             try {
                 const playPromise = rewardAudio.play()
                 if (playPromise && typeof playPromise.catch === 'function') {

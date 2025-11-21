@@ -21,6 +21,7 @@ export class RewardValueModal extends Modal {
     private readonly onResult: (value: number | null) => void
 
     private value: number | null = null
+    private inputEl: HTMLInputElement | null = null
 
     constructor(
         app: App,
@@ -63,20 +64,20 @@ export class RewardValueModal extends Modal {
         contentEl.createEl('p', { text: description })
 
         const inputWrapper = contentEl.createDiv({ cls: 'reward-input-wrapper' })
-        const inputEl = inputWrapper.createEl('input', {
+        this.inputEl = inputWrapper.createEl('input', {
             type: 'number',
         })
-        inputEl.min = '0'
-        inputEl.max = this.kind === 'ENERGY' ? '10' : '5'
-        inputEl.step = this.kind === 'ENERGY' ? '0.5' : '0.5'
+        this.inputEl.min = '0'
+        this.inputEl.max = this.kind === 'ENERGY' ? '10' : '5'
+        this.inputEl.step = this.kind === 'ENERGY' ? '0.5' : '0.5'
         if (this.initial != null) {
-            inputEl.value = `${this.initial}`
+            this.inputEl.value = `${this.initial}`
         }
 
-        inputEl.addEventListener('keydown', (event: KeyboardEvent) => {
+        this.inputEl.addEventListener('keydown', (event: KeyboardEvent) => {
             if (event.key === 'Enter') {
                 event.preventDefault()
-                this.submit(inputEl)
+                this.submit(this.inputEl!)
             }
         })
 
@@ -86,21 +87,27 @@ export class RewardValueModal extends Modal {
 
         const okButton = buttonWrapper.createEl('button', { text: 'OK' })
         okButton.addEventListener('click', () => {
-            this.submit(inputEl)
+            if (!this.inputEl) {
+                return
+            }
+            this.submit(this.inputEl)
         })
 
         const cancelButton = buttonWrapper.createEl('button', {
-            text: 'Cancel',
+            text: '跳过',
         })
         cancelButton.addEventListener('click', () => {
+            if (!this.confirmSkipIfIncomplete()) {
+                return
+            }
             this.value = null
             this.close()
         })
 
         // Focus the input by default
         window.setTimeout(() => {
-            inputEl.focus()
-            inputEl.select()
+            this.inputEl?.focus()
+            this.inputEl?.select()
         }, 0)
     }
 
@@ -119,6 +126,14 @@ export class RewardValueModal extends Modal {
         const { contentEl } = this
         contentEl.empty()
         this.onResult(this.value)
+    }
+
+    private confirmSkipIfIncomplete(): boolean {
+        const hasEmpty = (this.inputEl?.value?.trim() ?? '').length === 0
+        if (!hasEmpty) {
+            return true
+        }
+        return window.confirm('仍有未填写的内容，确定要跳过吗？')
     }
 }
 
@@ -163,11 +178,14 @@ class RewardAndEnergyModal extends Modal {
         contentEl.empty()
 
         contentEl.createEl('h2', { text: '记录愉悦值与电量' })
-        contentEl.createEl('p', {
-            text: '请填写当前的愉悦值（0~5）和当前电量🔋（0~10分）。',
-        })
 
-        const rewardWrapper = contentEl.createDiv({
+        const rewardSection = contentEl.createDiv({
+            cls: 'pomodoro-start-section',
+        })
+        rewardSection.createEl('div', {
+            text: '请在 0~5 之间选择你当前的愉悦值。0~1 是非常低，2~3 是比较平静，3~4 是感受到愉悦感，4~5 是非常愉悦。',
+        })
+        const rewardWrapper = rewardSection.createDiv({
             cls: 'reward-input-wrapper',
         })
         this.rewardInput = rewardWrapper.createEl('input', {
@@ -181,7 +199,13 @@ class RewardAndEnergyModal extends Modal {
             this.rewardInput.value = `${this.initialReward}`
         }
 
-        const energyWrapper = contentEl.createDiv({
+        const energySection = contentEl.createDiv({
+            cls: 'pomodoro-start-section',
+        })
+        energySection.createEl('div', {
+            text: '描述你当前的电量🔋(0~10分)',
+        })
+        const energyWrapper = energySection.createDiv({
             cls: 'reward-input-wrapper',
         })
         this.energyInput = energyWrapper.createEl('input', {
@@ -202,9 +226,12 @@ class RewardAndEnergyModal extends Modal {
         okButton.addEventListener('click', () => this.submit())
 
         const cancelButton = buttonWrapper.createEl('button', {
-            text: 'Cancel',
+            text: '跳过',
         })
         cancelButton.addEventListener('click', () => {
+            if (!this.confirmSkipIfIncomplete()) {
+                return
+            }
             this.resolved = true
             this.onResult(null)
             this.close()
@@ -248,6 +275,16 @@ class RewardAndEnergyModal extends Modal {
             return null
         }
         return Math.max(0, Math.min(max, numeric))
+    }
+
+    private confirmSkipIfIncomplete(): boolean {
+        const rewardValue = this.rewardInput?.value?.trim() ?? ''
+        const energyValue = this.energyInput?.value?.trim() ?? ''
+        const hasEmpty = rewardValue.length === 0 || energyValue.length === 0
+        if (!hasEmpty) {
+            return true
+        }
+        return window.confirm('仍有未填写的内容，确定要跳过吗？')
     }
 }
 
