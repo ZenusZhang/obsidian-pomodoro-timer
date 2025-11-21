@@ -110,12 +110,16 @@ export default class PomodoroTimerPlugin extends Plugin {
             leaf = leaves[0]
         } else {
             leaf = workspace.getRightLeaf(false)
-            await leaf.setViewState({
-                type: VIEW_TYPE_TIMER,
-                active: true,
-            })
+            if (leaf) {
+                await leaf.setViewState({
+                    type: VIEW_TYPE_TIMER,
+                    active: true,
+                })
+            }
         }
 
-        workspace.revealLeaf(leaf)
+        if (leaf) {
+            workspace.revealLeaf(leaf)
+        }
     }
 }
