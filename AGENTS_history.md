@@ -67,3 +67,18 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
   - 优化随机提醒声音：系统通知尊重声音开关并允许系统提示音，同时播放奖励提示音以恢复提醒声效。
   - Break 模式点击 reset 会重置为 WORK 起始。
   - 从 pomodoro.pomodorotechnique.com 下载提示音，已保存至 assets/pomodorotechnique/（alarm/break/half/review/tick/windup.wav）。
+
+# 第三轮的需求
+- 对第二轮需求的完善：
+1. 在同时记录RVR与ELR时，提示框不应该是只有同一个提示词，而是应该像我们开始一个timer时，那种分开的两个提示词。这样，在只开启记录单个RVR或ELR时，提示词可以被复用。
+2. 把random timer的提醒音效换成/home/dyzhang/projects/pomodoro_timer/obsidian-pomodoro-timer/assets/pomodorotechnique/review.wav, 并且声音要调到最大, 现在的版本中，我需要把系统的声音调到百分之五十才能听清楚提示音。我希望能在百分之二十的时候就能听清。
+3. 对于提醒中的每一个弹窗，如果用户在存在空白输入框时点击跳过，应该弹窗是否确认跳过。
+4. 番茄的结束提醒仍然会用到浮点分钟的单位"you have been working for mm.mmmmmmm minutes", 请你修改这个问题。
+
+
+# 第三轮的修改(记住，要填写git commit的id)
+- 2025-11-21 Codex: 完成第三轮需求（commit 1475865）：
+  - random timer 双输入弹窗分拆愉悦值与电量提示词，沿用开始时的文案，同时空白跳过会再次确认。
+  - 单项 RVR/ELR 提醒的跳过行为也需要确认，避免空白提交。
+  - 番茄结束通知的时长展示改为 mm:ss，移除浮点分钟显示。
+  - random timer 提醒音换为 assets/pomodorotechnique/review.wav 并调至最大音量。
