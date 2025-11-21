@@ -169,4 +169,8 @@ const updateToggle = (key: ToggleKey) => (e: Event) => {
     border: none;
     box-shadow: none;
 }
+
+.pomodoro-settings-item input[type='checkbox'] {
+    accent-color: var(--text-normal);
+}
 </style>
