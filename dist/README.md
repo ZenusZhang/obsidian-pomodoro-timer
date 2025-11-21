@@ -47,7 +47,7 @@ This directory contains all the files needed to install the Pomodoro Timer plugi
 
 ## 🔊 Audio Assets
 
-The plugin includes custom notification sounds from pomodoro technique website in the `assets/pomodorotechnique/` directory.
+The plugin includes custom notification sounds that are bundled within main.js. The audio files are loaded from your vault's assets directory if you want to use custom sounds (configurable in settings).
 
 ## 📝 Version Information
 
