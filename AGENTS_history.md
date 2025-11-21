@@ -82,3 +82,25 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
   - 单项 RVR/ELR 提醒的跳过行为也需要确认，避免空白提交。
   - 番茄结束通知的时长展示改为 mm:ss，移除浮点分钟显示。
   - random timer 提醒音换为 assets/pomodorotechnique/review.wav 并调至最大音量。
+
+
+# 第四轮的需求
+- 对第三轮的完善
+1. 此时setting里的work, break, auto-start这些选项中，work还是用mm.mmmmmmmm的格式，把它改成mm:ss的。
+
+- 新的需求
+2. 在一个番茄钟开始后，目前有三个可以点击的按钮：task，reset，setting。
+我想添加一个按钮,在讨论中，我们暂时把它称作“主动记录”，它会像setting一样有一个子菜单。
+子菜单中有不同的按钮，目前来说只需要两个按钮，1是内部打扰(inner interupt) 2是外部打扰(outter interupt).
+当这些按钮被点击之后，应该在当前番茄出现像ARV/ELR的一条记录， 格式应该是
+- i_interupt: [mm:ss], [mm:ss]
+- o_interupt: [mm:ss], [mm:ss]
+这里的mm:ss应该是当前这个番茄中，第x次按下按钮的时间。
+比如在当前番茄开始的5min时，第1次按下inner interupt, 就应该是增添一行：
+- i_interupt: 5:00
+
+# 第四轮的修改
+- 2025-11-21 Codex: 完成第四轮需求（commit 57a1dbd）：
+  - 设置页的 Work/Break 时长输入改为 mm:ss 文本格式并即时回填，修复 Break 字段的回写错误。
+  - 计时界面新增“主动记录”按钮与子菜单，仅在工作番茄中启用以记录内部/外部打扰。
+  - 内/外部打扰记录以 i_interupt/o_interupt 行写入 Pomodoro Section，按按下时的 mm:ss 累积时间展示。
