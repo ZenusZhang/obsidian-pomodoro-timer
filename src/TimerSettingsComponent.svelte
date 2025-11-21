@@ -150,7 +150,7 @@ const updateToggle = (key: ToggleKey) => (e: Event) => {
     border-top: 1px solid var(--background-modifier-border);
 }
 
-.pomodoro-settings-item input {
+.pomodoro-settings-item input[type='text'] {
     /* width: 100%; */
     font-size: 0.8rem;
     border: none;
@@ -160,12 +160,12 @@ const updateToggle = (key: ToggleKey) => (e: Event) => {
     background: transparent;
 }
 
-.pomodoro-settings-item input:active {
+.pomodoro-settings-item input[type='text']:active {
     border: none;
     box-shadow: none;
 }
 
-.pomodoro-settings-item input:focus {
+.pomodoro-settings-item input[type='text']:focus {
     border: none;
     box-shadow: none;
 }
