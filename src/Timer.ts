@@ -123,6 +123,8 @@ export default class Timer implements Readable<TimerStore> {
 
     private audioContext: AudioContext | null = null
 
+    private startAudio: HTMLAudioElement | null = null
+
     private randomPromptCount = 0
 
     constructor(plugin: PomodoroTimerPlugin) {
@@ -473,6 +475,10 @@ export default class Timer implements Readable<TimerStore> {
             const shouldAskEnergy =
                 settings.energyLevelRecord && shouldPromptForDetails
 
+            if (this.state.mode === 'WORK' && settings.notificationSound) {
+                this.playAudio('START')
+            }
+
             let expected: number | null = null
             let initialEnergyLevel: number | null = null
             let sessionDescription = ''
@@ -511,10 +517,6 @@ export default class Timer implements Readable<TimerStore> {
 
             if (canTrackReward || canTrackEnergy) {
                 this.scheduleRandomPrompt()
-            }
-
-            if (this.state.mode === 'WORK' && settings.notificationSound) {
-                this.playAudio('START')
             }
 
             const ctx = this.createLogContext(this.state)
@@ -742,6 +744,13 @@ export default class Timer implements Readable<TimerStore> {
     }
 
     public playAudio(kind: 'START' | 'END' = 'END') {
+        if (kind === 'START') {
+            const startPlayed = this.playStartAudioClip()
+            if (startPlayed) {
+                return
+            }
+        }
+
         const customSound = this.plugin.getSettings().customSound
         if (customSound && this.playCustomSound(customSound)) {
             return
@@ -790,6 +799,47 @@ export default class Timer implements Readable<TimerStore> {
         if (!played) {
             this.playDefaultAudioClip()
         }
+    }
+
+    private playStartAudioClip(): boolean {
+        const startAudio = this.getStartAudio()
+        if (!startAudio) {
+            return false
+        }
+        try {
+            startAudio.currentTime = 0
+            startAudio.volume = 1
+            const playPromise = startAudio.play()
+            if (playPromise && typeof playPromise.catch === 'function') {
+                void playPromise.catch(() => {
+                    this.playDefaultAudioClip()
+                })
+            }
+            return true
+        } catch (error) {
+            console.warn('Failed to play start audio sample', error)
+        }
+        return false
+    }
+
+    private getStartAudio(): HTMLAudioElement | null {
+        if (this.startAudio) {
+            return this.startAudio
+        }
+        const relativePath = `.obsidian/plugins/${this.plugin.manifest.id}/assets/pomodorotechnique/windup.wav`
+        try {
+            const soundFile =
+                this.plugin.app.vault.getAbstractFileByPath(relativePath)
+            if (soundFile && soundFile instanceof TFile) {
+                const soundSrc =
+                    this.plugin.app.vault.getResourcePath(soundFile)
+                this.startAudio = new Audio(soundSrc)
+                return this.startAudio
+            }
+        } catch (error) {
+            console.warn('Failed to load start audio from assets', error)
+        }
+        return null
     }
 
     private playCustomSound(path: string): boolean {

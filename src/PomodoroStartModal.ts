@@ -25,6 +25,7 @@ class PomodoroStartModal extends Modal {
     private descriptionInput!: HTMLTextAreaElement
     private rewardInput: HTMLInputElement | null = null
     private energyInput: HTMLInputElement | null = null
+    private outsideClickHandler: ((event: Event) => void) | null = null
     private resolved = false
 
     constructor(
@@ -44,6 +45,7 @@ class PomodoroStartModal extends Modal {
     onOpen() {
         const { contentEl } = this
         contentEl.empty()
+        this.preventOutsideClose()
 
         contentEl.createEl('h2', { text: '设置当前番茄' })
 
@@ -129,6 +131,29 @@ class PomodoroStartModal extends Modal {
         }, 0)
     }
 
+    private preventOutsideClose() {
+        const blockOutside = (event: Event) => {
+            const target = event.target
+            if (!(target instanceof HTMLElement)) {
+                return
+            }
+            if (!this.contentEl.contains(target)) {
+                event.preventDefault()
+                event.stopImmediatePropagation()
+            }
+        }
+
+        const events: Array<keyof HTMLElementEventMap> = [
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.modalEl.addEventListener(evt, blockOutside, true)
+        }
+        this.outsideClickHandler = blockOutside
+    }
+
     private submit() {
         const description = this.descriptionInput.value?.trim() ?? ''
         const rewardValue =
@@ -162,6 +187,7 @@ class PomodoroStartModal extends Modal {
     }
 
     onClose() {
+        this.removeOutsideCloseGuard()
         this.contentEl.empty()
         if (!this.resolved) {
             this.onSubmit({
@@ -186,6 +212,25 @@ class PomodoroStartModal extends Modal {
             return true
         }
         return window.confirm('仍有未填写的内容，确定要跳过吗？')
+    }
+
+    private removeOutsideCloseGuard() {
+        if (!this.outsideClickHandler) {
+            return
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.modalEl.removeEventListener(
+                evt,
+                this.outsideClickHandler,
+                true,
+            )
+        }
+        this.outsideClickHandler = null
     }
 }
 

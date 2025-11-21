@@ -22,6 +22,7 @@ export class RewardValueModal extends Modal {
 
     private value: number | null = null
     private inputEl: HTMLInputElement | null = null
+    private outsideClickHandler: ((event: Event) => void) | null = null
 
     constructor(
         app: App,
@@ -38,6 +39,7 @@ export class RewardValueModal extends Modal {
     onOpen() {
         const { contentEl } = this
         contentEl.empty()
+        this.preventOutsideClose()
 
         let title = ''
         if (this.kind === 'EXPECTED') {
@@ -124,8 +126,31 @@ export class RewardValueModal extends Modal {
 
     onClose() {
         const { contentEl } = this
+        this.removeOutsideCloseGuard()
         contentEl.empty()
         this.onResult(this.value)
+    }
+
+    private preventOutsideClose() {
+        const blockOutside = (event: Event) => {
+            const target = event.target
+            if (!(target instanceof HTMLElement)) {
+                return
+            }
+            if (!this.contentEl.contains(target)) {
+                event.preventDefault()
+                event.stopImmediatePropagation()
+            }
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.modalEl.addEventListener(evt, blockOutside, true)
+        }
+        this.outsideClickHandler = blockOutside
     }
 
     private confirmSkipIfIncomplete(): boolean {
@@ -134,6 +159,25 @@ export class RewardValueModal extends Modal {
             return true
         }
         return window.confirm('仍有未填写的内容，确定要跳过吗？')
+    }
+
+    private removeOutsideCloseGuard() {
+        if (!this.outsideClickHandler) {
+            return
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.modalEl.removeEventListener(
+                evt,
+                this.outsideClickHandler,
+                true,
+            )
+        }
+        this.outsideClickHandler = null
     }
 }
 
@@ -159,6 +203,7 @@ class RewardAndEnergyModal extends Modal {
 
     private rewardInput!: HTMLInputElement
     private energyInput!: HTMLInputElement
+    private outsideClickHandler: ((event: Event) => void) | null = null
     private resolved = false
 
     constructor(
@@ -176,6 +221,7 @@ class RewardAndEnergyModal extends Modal {
     onOpen() {
         const { contentEl } = this
         contentEl.empty()
+        this.preventOutsideClose()
 
         contentEl.createEl('h2', { text: '记录愉悦值与电量' })
 
@@ -244,11 +290,34 @@ class RewardAndEnergyModal extends Modal {
     }
 
     onClose() {
+        this.removeOutsideCloseGuard()
         this.contentEl.empty()
         if (this.resolved) {
             return
         }
         this.onResult(null)
+    }
+
+    private preventOutsideClose() {
+        const blockOutside = (event: Event) => {
+            const target = event.target
+            if (!(target instanceof HTMLElement)) {
+                return
+            }
+            if (!this.contentEl.contains(target)) {
+                event.preventDefault()
+                event.stopImmediatePropagation()
+            }
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.modalEl.addEventListener(evt, blockOutside, true)
+        }
+        this.outsideClickHandler = blockOutside
     }
 
     private submit() {
@@ -285,6 +354,25 @@ class RewardAndEnergyModal extends Modal {
             return true
         }
         return window.confirm('仍有未填写的内容，确定要跳过吗？')
+    }
+
+    private removeOutsideCloseGuard() {
+        if (!this.outsideClickHandler) {
+            return
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.modalEl.removeEventListener(
+                evt,
+                this.outsideClickHandler,
+                true,
+            )
+        }
+        this.outsideClickHandler = null
     }
 }
 
