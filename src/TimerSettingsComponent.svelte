@@ -3,33 +3,43 @@ import { settings } from 'stores'
 
 import { formatMinutesAsClock, parseClockToMillis } from 'utils'
 
-const updateWorkLen = (e: Event) => {
+type DurationKey = 'workLen' | 'breakLen'
+type ToggleKey =
+    | 'autostart'
+    | 'notificationSound'
+    | 'logFocused'
+    | 'rewardValueRecord'
+    | 'energyLevelRecord'
+
+const updateTimerLen = (key: DurationKey, minMinutes: number) => (e: Event) => {
     const target = e.target as HTMLInputElement
-    settings.update((s) => {
-        const millis = parseClockToMillis(target.value)
-        if (millis !== null) {
-            const minutes = millis / 60000
-            if (minutes >= 1) {
-                s.workLen = minutes
-            }
+    const millis = parseClockToMillis(target.value)
+
+    settings.update((current) => {
+        const currentValue = current[key]
+        const minutes = millis === null ? currentValue : millis / 60000
+        const nextValue = minutes >= minMinutes ? minutes : currentValue
+
+        target.value = formatMinutesAsClock(nextValue)
+
+        if (nextValue === currentValue) {
+            return current
         }
-        target.value = formatMinutesAsClock(s.workLen)
-        return s
+        return { ...current, [key]: nextValue }
     })
 }
 
-const updateBreakLen = (e: Event) => {
+const updateWorkLen = updateTimerLen('workLen', 1)
+const updateBreakLen = updateTimerLen('breakLen', 0)
+
+const updateToggle = (key: ToggleKey) => (e: Event) => {
     const target = e.target as HTMLInputElement
-    settings.update((s) => {
-        const millis = parseClockToMillis(target.value)
-        if (millis !== null) {
-            const minutes = millis / 60000
-            if (minutes >= 0) {
-                s.breakLen = minutes
-            }
+    const checked = target.checked
+    settings.update((current) => {
+        if (current[key] === checked) {
+            return current
         }
-        target.value = formatMinutesAsClock(s.breakLen)
-        return s
+        return { ...current, [key]: checked }
     })
 }
 </script>
@@ -63,7 +73,11 @@ const updateBreakLen = (e: Event) => {
         <div class="pomodoro-settings-item">
             <div class="pomodoro-settings-label">Auto-start</div>
             <div class="pomodoro-settings-control">
-                <input type="checkbox" bind:checked={$settings.autostart} />
+                <input
+                    type="checkbox"
+                    checked={$settings.autostart}
+                    on:change={updateToggle('autostart')}
+                />
             </div>
         </div>
         <div class="pomodoro-settings-item">
@@ -71,7 +85,8 @@ const updateBreakLen = (e: Event) => {
             <div class="pomodoro-settings-control">
                 <input
                     type="checkbox"
-                    bind:checked={$settings.notificationSound}
+                    checked={$settings.notificationSound}
+                    on:change={updateToggle('notificationSound')}
                 />
             </div>
         </div>
@@ -80,7 +95,11 @@ const updateBreakLen = (e: Event) => {
                 Prefer Saving to Task File
             </div>
             <div class="pomodoro-settings-control">
-                <input type="checkbox" bind:checked={$settings.logFocused} />
+                <input
+                    type="checkbox"
+                    checked={$settings.logFocused}
+                    on:change={updateToggle('logFocused')}
+                />
             </div>
         </div>
         <div class="pomodoro-settings-item">
@@ -88,7 +107,8 @@ const updateBreakLen = (e: Event) => {
             <div class="pomodoro-settings-control">
                 <input
                     type="checkbox"
-                    bind:checked={$settings.rewardValueRecord}
+                    checked={$settings.rewardValueRecord}
+                    on:change={updateToggle('rewardValueRecord')}
                 />
             </div>
         </div>
@@ -97,7 +117,8 @@ const updateBreakLen = (e: Event) => {
             <div class="pomodoro-settings-control">
                 <input
                     type="checkbox"
-                    bind:checked={$settings.energyLevelRecord}
+                    checked={$settings.energyLevelRecord}
+                    on:change={updateToggle('energyLevelRecord')}
                 />
             </div>
         </div>

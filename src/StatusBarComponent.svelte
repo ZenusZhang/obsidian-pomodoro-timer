@@ -11,6 +11,15 @@ const toggleTimer = () => {
     store.toggleTimer()
 }
 
+type ToggleKey = 'autostart' | 'notificationSound'
+
+const updateToggleSetting = (key: ToggleKey) => {
+    settings.update((current) => {
+        const nextValue = !current[key]
+        return { ...current, [key]: nextValue }
+    })
+}
+
 $: {
     if (statusbar && mode !== $store.mode) {
         mode = $store.mode
@@ -52,10 +61,7 @@ const ctxMenu = (e: MouseEvent) => {
         item.setTitle('Auto-start')
         item.setChecked($settings.autostart)
         item.onClick(() => {
-            settings.update((s) => {
-                s.autostart = !s.autostart
-                return s
-            })
+            updateToggleSetting('autostart')
         })
     })
 
@@ -63,10 +69,7 @@ const ctxMenu = (e: MouseEvent) => {
         item.setTitle('Sound')
         item.setChecked($settings.notificationSound)
         item.onClick(() => {
-            settings.update((s) => {
-                s.notificationSound = !s.notificationSound
-                return s
-            })
+            updateToggleSetting('notificationSound')
         })
     })
 
