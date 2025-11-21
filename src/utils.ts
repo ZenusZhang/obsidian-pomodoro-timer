@@ -210,3 +210,38 @@ export function toInlineFieldRegex(innerFieldRegex: RegExp): RegExp {
         .join('')
     return new RegExp(fieldRegex, innerFieldRegex.flags)
 }
+
+export function formatMillisAsClock(millis: number): string {
+    const totalSeconds = Math.max(0, Math.round(millis / 1000))
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    const minStr = minutes.toString().padStart(2, '0')
+    const secStr = seconds.toString().padStart(2, '0')
+    return `${minStr}:${secStr}`
+}
+
+export function formatMinutesAsClock(minutes: number): string {
+    const millis = Math.max(0, Math.round(minutes * 60 * 1000))
+    return formatMillisAsClock(millis)
+}
+
+export function parseClockToMillis(text: string): number | null {
+    const trimmed = text.trim()
+    if (!trimmed) {
+        return null
+    }
+    const match = trimmed.match(/^(\d+)(?::(\d{1,2}))?$/)
+    if (!match) {
+        return null
+    }
+    const minutes = parseInt(match[1], 10)
+    const seconds = match[2] ? parseInt(match[2], 10) : 0
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+        return null
+    }
+    if (seconds >= 60 || seconds < 0 || minutes < 0) {
+        return null
+    }
+    const totalSeconds = minutes * 60 + seconds
+    return totalSeconds * 1000
+}

@@ -7,6 +7,11 @@ export interface RewardValueModalOptions {
     initial?: number | null
 }
 
+export interface RewardAndEnergyResult {
+    reward: number | null
+    energy: number | null
+}
+
 /**
  * Simple modal used to ask the user for a reward value in the range [0, 5].
  */
@@ -129,5 +134,134 @@ export function askRewardValue(
             (value) => resolve(value),
         )
         modal.open()
+    })
+}
+
+class RewardAndEnergyModal extends Modal {
+    private readonly initialReward: number | null
+    private readonly initialEnergy: number | null
+    private readonly onResult: (result: RewardAndEnergyResult | null) => void
+
+    private rewardInput!: HTMLInputElement
+    private energyInput!: HTMLInputElement
+    private resolved = false
+
+    constructor(
+        app: App,
+        initialReward: number | null,
+        initialEnergy: number | null,
+        onResult: (result: RewardAndEnergyResult | null) => void,
+    ) {
+        super(app)
+        this.initialReward = initialReward
+        this.initialEnergy = initialEnergy
+        this.onResult = onResult
+    }
+
+    onOpen() {
+        const { contentEl } = this
+        contentEl.empty()
+
+        contentEl.createEl('h2', { text: '记录愉悦值与电量' })
+        contentEl.createEl('p', {
+            text: '请填写当前的愉悦值（0~5）和当前电量🔋（0~10分）。',
+        })
+
+        const rewardWrapper = contentEl.createDiv({
+            cls: 'reward-input-wrapper',
+        })
+        this.rewardInput = rewardWrapper.createEl('input', {
+            type: 'number',
+            placeholder: '愉悦值 0~5',
+        })
+        this.rewardInput.min = '0'
+        this.rewardInput.max = '5'
+        this.rewardInput.step = '0.5'
+        if (this.initialReward != null) {
+            this.rewardInput.value = `${this.initialReward}`
+        }
+
+        const energyWrapper = contentEl.createDiv({
+            cls: 'reward-input-wrapper',
+        })
+        this.energyInput = energyWrapper.createEl('input', {
+            type: 'number',
+            placeholder: '当前电量 0~10',
+        })
+        this.energyInput.min = '0'
+        this.energyInput.max = '10'
+        this.energyInput.step = '0.5'
+        if (this.initialEnergy != null) {
+            this.energyInput.value = `${this.initialEnergy}`
+        }
+
+        const buttonWrapper = contentEl.createDiv({
+            cls: 'reward-button-wrapper',
+        })
+        const okButton = buttonWrapper.createEl('button', { text: 'OK' })
+        okButton.addEventListener('click', () => this.submit())
+
+        const cancelButton = buttonWrapper.createEl('button', {
+            text: 'Cancel',
+        })
+        cancelButton.addEventListener('click', () => {
+            this.resolved = true
+            this.onResult(null)
+            this.close()
+        })
+
+        window.setTimeout(() => {
+            this.rewardInput.focus()
+            this.rewardInput.select()
+        }, 0)
+    }
+
+    onClose() {
+        this.contentEl.empty()
+        if (this.resolved) {
+            return
+        }
+        this.onResult(null)
+    }
+
+    private submit() {
+        const rewardValue = this.rewardInput.value?.trim()
+        const energyValue = this.energyInput.value?.trim()
+
+        const parsedReward = this.parseValue(rewardValue, 5)
+        const parsedEnergy = this.parseValue(energyValue, 10)
+
+        this.resolved = true
+        this.onResult({
+            reward: parsedReward,
+            energy: parsedEnergy,
+        })
+        this.close()
+    }
+
+    private parseValue(value: string | undefined, max: number): number | null {
+        if (!value || value.length === 0) {
+            return null
+        }
+        const numeric = Number(value)
+        if (Number.isNaN(numeric)) {
+            return null
+        }
+        return Math.max(0, Math.min(max, numeric))
+    }
+}
+
+export function askRewardAndEnergy(
+    app: App,
+    initialReward: number | null = null,
+    initialEnergy: number | null = null,
+): Promise<RewardAndEnergyResult | null> {
+    return new Promise((resolve) => {
+        new RewardAndEnergyModal(
+            app,
+            initialReward,
+            initialEnergy,
+            (result) => resolve(result),
+        ).open()
     })
 }

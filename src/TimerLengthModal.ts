@@ -1,4 +1,5 @@
 import { App, Modal } from 'obsidian'
+import { formatMinutesAsClock, parseClockToMillis } from 'utils'
 
 export interface TimerLengthModalOptions {
     initialMinutes: number
@@ -21,11 +22,11 @@ export class TimerLengthModal extends Modal {
         onSubmit: (value: number | null) => void,
     ) {
         super(app)
-        this.initialMinutes = options.initialMinutes
+        this.initialMinutes = Math.max(0, options.initialMinutes)
         this.titleText = options.title ?? '设置当前番茄钟的时间'
         this.descriptionText =
             options.description ??
-            '请输入你希望的时间（单位：分钟，可以包含小数）。'
+            '请输入你希望的时间，格式 mm:ss（例如 05:00 或 25:00）。'
         this.minMinutes = options.minMinutes ?? 0
         this.onSubmit = onSubmit
     }
@@ -36,11 +37,10 @@ export class TimerLengthModal extends Modal {
         contentEl.createEl('h2', { text: this.titleText })
         contentEl.createEl('p', { text: this.descriptionText })
         this.inputEl = contentEl.createEl('input', {
-            type: 'number',
-            value: `${this.initialMinutes}`,
+            type: 'text',
+            value: formatMinutesAsClock(this.initialMinutes),
         })
-        this.inputEl.step = '0.5'
-        this.inputEl.min = `${this.minMinutes}`
+        this.inputEl.placeholder = 'mm:ss'
         this.inputEl.addEventListener('keydown', (event: KeyboardEvent) => {
             if (event.key === 'Enter') {
                 event.preventDefault()
@@ -64,12 +64,20 @@ export class TimerLengthModal extends Modal {
     }
 
     private submit() {
-        const value = Number(this.inputEl.value)
-        if (Number.isNaN(value) || value < this.minMinutes) {
+        const millis = parseClockToMillis(this.inputEl.value)
+        if (millis === null) {
             this.onSubmit(null)
-        } else {
-            this.onSubmit(value)
+            this.close()
+            return
         }
+        const minutes = millis / 60000
+        if (minutes < this.minMinutes) {
+            this.onSubmit(null)
+            this.close()
+            return
+        }
+
+        this.onSubmit(minutes)
         this.close()
     }
 
@@ -86,4 +94,3 @@ export function askForTimerLength(
         new TimerLengthModal(app, options, (value) => resolve(value)).open()
     })
 }
-

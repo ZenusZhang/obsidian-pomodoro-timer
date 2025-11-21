@@ -141,7 +141,7 @@ export default class Logger {
 
         const samples =
             (ctx as any).rewardSamples as
-                | { value: number; minutesFromStart: number }[]
+                | { value: number; elapsedMillis: number }[]
                 | undefined
 
         if (!samples || samples.length === 0) {
@@ -177,7 +177,7 @@ export default class Logger {
 
         const samples =
             (ctx as any).energySamples as
-                | { value: number; minutesFromStart: number }[]
+                | { value: number; elapsedMillis: number }[]
                 | undefined
 
         if (!samples || samples.length === 0) {
@@ -404,7 +404,7 @@ export default class Logger {
         if (kind === 'END') {
             const rewardSamples =
                 (ctx as any).rewardSamples as
-                    | { value: number; minutesFromStart: number }[]
+                    | { value: number; elapsedMillis: number }[]
                     | undefined
             if (rewardSamples && rewardSamples.length > 0) {
                 const avg =
@@ -424,7 +424,7 @@ export default class Logger {
 
     private async updatePomodoroSectionMetricLine(
         file: TFile,
-        samples: { value: number; minutesFromStart: number }[],
+        samples: { value: number; elapsedMillis: number }[],
         label: string,
     ): Promise<void> {
         const app = this.plugin.app
@@ -523,7 +523,7 @@ export default class Logger {
         }
 
         const parts = samples.map((s) => {
-            const tStr = `${s.minutesFromStart}m`
+            const tStr = utils.formatMillisAsClock(s.elapsedMillis)
             return `${s.value}, ${tStr}`
         })
 

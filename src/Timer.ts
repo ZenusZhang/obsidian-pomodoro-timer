@@ -9,7 +9,7 @@ import DEFAULT_NOTIFICATION from 'Notification'
 import REWARD_NOTIFICATION from 'RewardNotification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
-import { askRewardValue } from 'RewardValueModal'
+import { askRewardAndEnergy, askRewardValue } from 'RewardValueModal'
 import { askPomodoroStartInfo } from 'PomodoroStartModal'
 import { askForTimerLength } from 'TimerLengthModal'
 
@@ -47,7 +47,7 @@ export type TimerRemained = {
 
 type TimedSample = {
     value: number
-    minutesFromStart: number
+    elapsedMillis: number
 }
 
 const DEFAULT_TASK: TaskItem = {
@@ -174,20 +174,16 @@ export default class Timer implements Readable<TimerStore> {
         let secStr = sec < 10 ? `0${sec}` : sec.toString()
         return {
             millis: remained,
-            human: `${minStr} : ${secStr}`,
+            human: `${minStr}:${secStr}`,
         }
     }
 
-    private minutesFromSessionStart(referenceTime: number = Date.now()): number {
+    private elapsedFromSessionStart(referenceTime: number = Date.now()): number {
         if (this.state.startTime != null) {
-            return (
-                Math.round(
-                    ((referenceTime - this.state.startTime) / 60000) * 10,
-                ) / 10
-            )
+            return Math.max(0, referenceTime - this.state.startTime)
         }
         if (this.state.elapsed > 0) {
-            return Math.round((this.state.elapsed / 60000) * 10) / 10
+            return Math.max(0, this.state.elapsed)
         }
         return 0
     }
@@ -296,36 +292,67 @@ export default class Timer implements Readable<TimerStore> {
             energy: shouldTrackEnergy,
         })
 
-        if (shouldTrackReward) {
+        if (shouldTrackReward && shouldTrackEnergy) {
+            const result = await askRewardAndEnergy(this.plugin.app)
+            if (result) {
+                const completedAt = Date.now()
+                const elapsedMillis =
+                    this.elapsedFromSessionStart(completedAt)
+                this.update((state) => {
+                    if (result.reward != null) {
+                        state.rewardSamples.push({
+                            value: result.reward,
+                            elapsedMillis,
+                        })
+                    }
+                    if (result.energy != null) {
+                        state.energySamples.push({
+                            value: result.energy,
+                            elapsedMillis,
+                        })
+                    }
+                    return state
+                })
+                const ctx = this.createLogContext(this.state)
+                if (result.reward != null) {
+                    await this.logger.updateRewardTracking(ctx)
+                }
+                if (result.energy != null) {
+                    await this.logger.updateEnergyTracking(ctx)
+                }
+            }
+        } else if (shouldTrackReward) {
             const rewardValue = await askRewardValue(
                 this.plugin.app,
                 'ACTUAL',
             )
             if (rewardValue != null) {
-                const minutesFromStart = this.minutesFromSessionStart()
+                const completedAt = Date.now()
+                const elapsedMillis =
+                    this.elapsedFromSessionStart(completedAt)
                 this.update((state) => {
                     state.rewardSamples.push({
                         value: rewardValue,
-                        minutesFromStart,
+                        elapsedMillis,
                     })
                     return state
                 })
                 const ctx = this.createLogContext(this.state)
                 await this.logger.updateRewardTracking(ctx)
             }
-        }
-
-        if (shouldTrackEnergy) {
+        } else if (shouldTrackEnergy) {
             const energyValue = await askRewardValue(
                 this.plugin.app,
                 'ENERGY',
             )
             if (energyValue != null) {
-                const minutesFromStart = this.minutesFromSessionStart()
+                const completedAt = Date.now()
+                const elapsedMillis =
+                    this.elapsedFromSessionStart(completedAt)
                 this.update((state) => {
                     state.energySamples.push({
                         value: energyValue,
-                        minutesFromStart,
+                        elapsedMillis,
                     })
                     return state
                 })
@@ -361,7 +388,7 @@ export default class Timer implements Readable<TimerStore> {
                           ? 'Pomodoro Reward'
                           : 'Energy Level Record',
                 body: text,
-                silent: true,
+                silent: !settings.notificationSound,
             })
             sysNotification.on('click', () => {
                 this.focusObsidianWindow()
@@ -463,7 +490,7 @@ export default class Timer implements Readable<TimerStore> {
                 if (shouldAskEnergy && initialEnergyLevel != null) {
                     state.energySamples.push({
                         value: initialEnergyLevel,
-                        minutesFromStart: 0,
+                        elapsedMillis: 0,
                     })
                 }
                 return state
@@ -595,8 +622,9 @@ export default class Timer implements Readable<TimerStore> {
                 ctx = this.createLogContext(state)
             }
 
-            state.duration =
-                state.mode == 'WORK' ? state.workLen : state.breakLen
+            const nextMode: Mode = state.mode === 'BREAK' ? 'WORK' : state.mode
+            state.mode = nextMode
+            state.duration = nextMode === 'WORK' ? state.workLen : state.breakLen
             state.count = state.duration * 60 * 1000
             state.inSession = false
             state.running = false
@@ -634,8 +662,7 @@ export default class Timer implements Readable<TimerStore> {
             return
         }
         const remainingMillis = Math.max(0, this.state.count - this.state.elapsed)
-        const remainingMinutes =
-            Math.round((remainingMillis / 60000) * 10) / 10
+        const remainingMinutes = remainingMillis / 60000
         const initialMinutes = this.state.inSession
             ? remainingMinutes
             : this.state.duration
@@ -648,26 +675,28 @@ export default class Timer implements Readable<TimerStore> {
         if (result == null) {
             return
         }
-        const sanitized = Math.max(0, result)
+        const requestedMillis = Math.max(
+            0,
+            Math.round(result * 60 * 1000),
+        )
         this.update((state) => {
-            const elapsedMinutes = state.elapsed / 60000
             if (state.inSession) {
-                const totalMinutes = sanitized + elapsedMinutes
-                state.duration = totalMinutes
-                state.count = Math.max(0, Math.round(totalMinutes * 60 * 1000))
+                const totalMillis = requestedMillis + state.elapsed
+                state.duration = totalMillis / 60000
+                state.count = Math.max(0, totalMillis)
                 if (state.elapsed > state.count) {
                     state.elapsed = state.count
                 }
             } else {
-                state.duration = sanitized
-                state.count = Math.max(0, Math.round(sanitized * 60 * 1000))
+                state.duration = requestedMillis / 60000
+                state.count = Math.max(0, requestedMillis)
                 state.elapsed = 0
                 if (state.mode === 'WORK') {
-                    state.workLen = sanitized
-                    this.plugin.updateSettings({ workLen: sanitized })
+                    state.workLen = state.duration
+                    this.plugin.updateSettings({ workLen: state.duration })
                 } else {
-                    state.breakLen = sanitized
-                    this.plugin.updateSettings({ breakLen: sanitized })
+                    state.breakLen = state.duration
+                    this.plugin.updateSettings({ breakLen: state.duration })
                 }
             }
             return state

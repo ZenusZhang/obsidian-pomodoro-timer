@@ -51,4 +51,19 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
 
 
 # 第二轮的需求
+- 对第一轮修改的反馈：
+1. 在random timer计时完成时，RVR, ELR应该在同一个提示窗口中被记录,同一个窗口有两个输入框，像我们在初始的提示窗口中那样，而不是两个提示窗口。
+2. 在番茄钟所有时间相关的log/set中，都应该用mm:ss的格式，而不是mm.mm。我目前看到的mm.mm的格式会出现在ARV，ELR的记录中，以及设置当前番茄时间的逻辑中。请你查看是否还有其他的log/set需要被修改，并且帮我应用上述修改。
+3. 现在random timer的提醒没有声音了，请你修复这个问题。 
+
+- 第二轮的新需求：
 1. 在Break的计时过程中，如果点击了reset（一个转圈的按钮），应该自动把当前的番茄状态设置成WORK。
+2. 这个网站是一个番茄钟网站，它会有一些提示音,你可以把它们逆向下载下来吗？https://pomodoro.pomodorotechnique.com/
+
+# 第二轮的修改
+- 2025-11-21 Codex: 完成第二轮需求与反馈：
+  - random timer 提醒时 RVR 与 ELR 共用单一弹窗（双输入），统一一次记录并继续沿用提醒计时与声效。
+  - ARV/ELR 记录时间改为 mm:ss，定时器剩余显示与临时时长设置弹窗也统一 mm:ss 输入/展示，设置当前番茄时间不再出现 mm.mm。
+  - 优化随机提醒声音：系统通知尊重声音开关并允许系统提示音，同时播放奖励提示音以恢复提醒声效。
+  - Break 模式点击 reset 会重置为 WORK 起始。
+  - 从 pomodoro.pomodorotechnique.com 下载提示音，已保存至 assets/pomodorotechnique/（alarm/break/half/review/tick/windup.wav）。
