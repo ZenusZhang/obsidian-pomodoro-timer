@@ -11,10 +11,14 @@ export let tracker: TaskTracker
 export let render: (content: string, el: HTMLElement) => void
 
 let extra: 'settings' | 'tasks' | 'close' = 'tasks'
+let recordMenuOpen = false
 const offset = 440
 
 $: strokeOffset = $timer.remained.millis / $timer.count * offset
 
+$: if (!$timer.inSession || $timer.mode !== 'WORK') {
+    recordMenuOpen = false
+}
 
 const start = () => {
     if (!$timer.running) {
@@ -24,6 +28,7 @@ const start = () => {
 
     const reset = () => {
         timer.reset()
+        recordMenuOpen = false
     }
 
 const configureTimerLength = () => {
@@ -38,11 +43,27 @@ const toggleMode = () => {
 }
 
 const toggleExtra = (value: 'settings' | 'tasks') => {
+    recordMenuOpen = false
     if (extra === value) {
         extra = 'close'
         return
     }
     extra = value
+}
+
+const toggleRecordMenu = () => {
+    if (!$timer.inSession || $timer.mode !== 'WORK') {
+        return
+    }
+    recordMenuOpen = !recordMenuOpen
+}
+
+const recordInterrupt = (kind: 'INNER' | 'OUTER') => {
+    if (!$timer.inSession || $timer.mode !== 'WORK') {
+        return
+    }
+    timer.recordInterrupt(kind)
+    recordMenuOpen = false
 }
 </script>
 
@@ -162,6 +183,45 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
                     /><path d="M3 3v5h5" /></svg
                 >
             </span>
+            <div class="record-menu-wrapper">
+                <span
+                    on:click={toggleRecordMenu}
+                    class="control"
+                    class:disabled={
+                        !$timer.inSession || $timer.mode !== 'WORK'
+                    }
+                    title="主动记录"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-flag"
+                        ><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line
+                            x1="4"
+                            y1="22"
+                            x2="4"
+                            y2="15"
+                        /></svg
+                    >
+                </span>
+                {#if recordMenuOpen && $timer.inSession}
+                    <div class="record-menu" on:click|stopPropagation>
+                        <button on:click={() => recordInterrupt('INNER')}>
+                            内部打扰
+                        </button>
+                        <button on:click={() => recordInterrupt('OUTER')}>
+                            外部打扰
+                        </button>
+                    </div>
+                {/if}
+            </div>
             <span
                 on:click={() => {
                     toggleExtra('settings')
@@ -269,8 +329,10 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
 .btn-group {
     margin-top: 1rem;
     display: flex;
-    justify-content: space-between;
-    width: 160px;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    width: 100%;
 }
 
 .control {
@@ -289,6 +351,39 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
 
 .control svg:active {
     opacity: 0.5;
+}
+
+.record-menu-wrapper {
+    position: relative;
+}
+
+.record-menu {
+    position: absolute;
+    top: 125%;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+}
+
+.record-menu button {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent, #fff);
+    border: none;
+    border-radius: 4px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.record-menu button:hover {
+    opacity: 0.85;
 }
 
 .pomodoro-extra {

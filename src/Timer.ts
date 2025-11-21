@@ -90,6 +90,8 @@ export type TimerState = {
     rewardSamples: TimedSample[]
     energySamples: TimedSample[]
     sessionDescription: string
+    innerInterrupts: number[]
+    outerInterrupts: number[]
 }
 
 export type TimerStore = TimerState & {
@@ -143,6 +145,8 @@ export default class Timer implements Readable<TimerStore> {
             rewardSamples: [],
             energySamples: [],
             sessionDescription: '',
+            innerInterrupts: [],
+            outerInterrupts: [],
         }
 
         let store = writable(this.state)
@@ -426,6 +430,8 @@ export default class Timer implements Readable<TimerStore> {
         await this.logger.logPomodoroEnd(ctx)
         await this.logger.updateRewardTracking(ctx)
         await this.logger.updateEnergyTracking(ctx)
+        await this.logger.updateInterruptTracking(ctx, 'INNER')
+        await this.logger.updateInterruptTracking(ctx, 'OUTER')
         const logFile = await this.logger.log(ctx)
         this.notify(ctx, logFile)
     }
@@ -444,6 +450,8 @@ export default class Timer implements Readable<TimerStore> {
                 s.rewardSamples = []
                 s.energySamples = []
                 s.sessionDescription = ''
+                s.innerInterrupts = []
+                s.outerInterrupts = []
                 this.randomPromptCount = 0
                 isNewSession = true
             }
@@ -707,6 +715,30 @@ export default class Timer implements Readable<TimerStore> {
 
     public toggleTimer() {
         this.state.running ? this.pause() : this.start()
+    }
+
+    public recordInterrupt(kind: 'INNER' | 'OUTER') {
+        if (
+            !this.state.inSession ||
+            this.state.startTime == null ||
+            this.state.mode !== 'WORK'
+        ) {
+            return
+        }
+        const elapsedMillis = Math.min(
+            this.elapsedFromSessionStart(),
+            this.state.count,
+        )
+        this.update((state) => {
+            const target =
+                kind === 'INNER'
+                    ? state.innerInterrupts
+                    : state.outerInterrupts
+            target.push(elapsedMillis)
+            return state
+        })
+        const ctx = this.createLogContext(this.state)
+        void this.logger.updateInterruptTracking(ctx, kind)
     }
 
     public playAudio(kind: 'START' | 'END' = 'END') {

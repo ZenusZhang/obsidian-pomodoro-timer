@@ -39,6 +39,15 @@ export type TaskLog = Pick<
 
 export type LogContext = TimerState & { task: TaskItem }
 
+type PomodoroSectionContext = {
+    lines: string[]
+    headerIndex: number
+    sectionEnd: number
+    lastStartIndex: number
+    lastStartId: number
+    blockTailIndex: number
+}
+
 export default class Logger {
     private plugin: PomodoroTimerPlugin
 
@@ -192,6 +201,42 @@ export default class Logger {
         await this.updatePomodoroSectionMetricLine(logFile, samples, '🔋:')
     }
 
+    public async updateInterruptTracking(
+        ctx: LogContext,
+        kind: 'INNER' | 'OUTER',
+    ): Promise<void> {
+        const settings = this.plugin.getSettings()
+
+        if (settings.logFormat !== 'POMODORO_SECTION') {
+            return
+        }
+
+        if (settings.logLevel !== 'ALL' && settings.logLevel !== ctx.mode) {
+            return
+        }
+
+        if (ctx.mode !== 'WORK') {
+            return
+        }
+
+        const samples =
+            (ctx as any)[
+                kind === 'INNER' ? 'innerInterrupts' : 'outerInterrupts'
+            ] as number[] | undefined
+
+        if (!samples || samples.length === 0) {
+            return
+        }
+
+        const logFile = await this.resolveLogFile(ctx)
+        if (!logFile) {
+            return
+        }
+
+        const label = kind === 'INNER' ? 'i_interupt:' : 'o_interupt:'
+        await this.updatePomodoroSectionInterruptLine(logFile, samples, label)
+    }
+
     public async log(ctx: LogContext): Promise<TFile | void> {
         const logFile = await this.resolveLogFile(ctx)
         const log = this.createLog(ctx)
@@ -270,6 +315,80 @@ export default class Logger {
             session: ctx.duration,
             task: ctx.task,
             finished: ctx.count == ctx.elapsed,
+        }
+    }
+
+    private async getPomodoroSectionContext(
+        file: TFile,
+    ): Promise<PomodoroSectionContext | null> {
+        const app = this.plugin.app
+        const content = await app.vault.read(file)
+        const lines = content.split('\n')
+
+        const headerRegex = /^#{1,6}\s+Pomodoro Section\s*$/i
+        const startRegex = /^\s*(?:-\s*)?(?:🍅\s+)?(\d+)\s+start\b/i
+
+        const headerIndex = lines.findIndex((line) => headerRegex.test(line))
+        if (headerIndex === -1) {
+            return null
+        }
+
+        let sectionEnd = lines.length
+        for (let i = headerIndex + 1; i < lines.length; i++) {
+            if (/^#{1,6}\s+/.test(lines[i])) {
+                sectionEnd = i
+                break
+            }
+        }
+
+        let lastStartIndex = -1
+        let lastStartId = 0
+        for (let i = headerIndex + 1; i < sectionEnd; i++) {
+            const match = lines[i].match(startRegex)
+            if (match) {
+                lastStartIndex = i
+                lastStartId = parseInt(match[1], 10)
+            }
+        }
+
+        if (lastStartIndex === -1) {
+            return null
+        }
+
+        const nextStartIndex = (() => {
+            for (let i = lastStartIndex + 1; i < sectionEnd; i++) {
+                if (startRegex.test(lines[i])) {
+                    return i
+                }
+            }
+            return -1
+        })()
+
+        let endLineIndex = -1
+        const endRegex = new RegExp(
+            '^\\s*(?:-\\s*)?(?:🍅\\s+)?' +
+                lastStartId.toString() +
+                '\\s+end\\b',
+            'i',
+        )
+        const searchEndLimit = nextStartIndex === -1 ? sectionEnd : nextStartIndex
+        for (let i = lastStartIndex + 1; i < searchEndLimit; i++) {
+            if (endRegex.test(lines[i])) {
+                endLineIndex = i
+                break
+            }
+        }
+
+        const blockTailIndex =
+            endLineIndex !== -1 ? endLineIndex : searchEndLimit
+
+        return {
+            lines,
+            headerIndex,
+            sectionEnd,
+            lastStartIndex,
+            lastStartId,
+            blockTailIndex,
         }
     }
 
@@ -428,71 +547,14 @@ export default class Logger {
         label: string,
     ): Promise<void> {
         const app = this.plugin.app
-        const content = await app.vault.read(file)
-        const lines = content.split('\n')
-
-        const headerRegex = /^#{1,6}\s+Pomodoro Section\s*$/i
-        const startRegex = /^\s*(?:-\s*)?(?:🍅\s+)?(\d+)\s+start\b/i
-
-        let headerIndex = lines.findIndex((line) => headerRegex.test(line))
-        if (headerIndex === -1) {
+        const context = await this.getPomodoroSectionContext(file)
+        if (!context) {
             return
         }
 
-        let sectionEnd = lines.length
-        for (let i = headerIndex + 1; i < lines.length; i++) {
-            if (/^#{1,6}\s+/.test(lines[i])) {
-                sectionEnd = i
-                break
-            }
-        }
-
-        let lastStartIndex = -1
-        let lastStartId = 0
-        for (let i = headerIndex + 1; i < sectionEnd; i++) {
-            const match = lines[i].match(startRegex)
-            if (match) {
-                lastStartIndex = i
-                lastStartId = parseInt(match[1], 10)
-            }
-        }
-
-        if (lastStartIndex === -1) {
-            return
-        }
-
-        const nextStartIndex = (() => {
-            for (let i = lastStartIndex + 1; i < sectionEnd; i++) {
-                if (startRegex.test(lines[i])) {
-                    return i
-                }
-            }
-            return -1
-        })()
-
-        let endLineIndex = -1
-        const endRegex = new RegExp(
-            '^\\s*(?:-\\s*)?(?:🍅\\s+)?' +
-                lastStartId.toString() +
-                '\\s+end\\b',
-            'i',
-        )
-        const searchEndLimit = nextStartIndex === -1 ? sectionEnd : nextStartIndex
-        for (let i = lastStartIndex + 1; i < searchEndLimit; i++) {
-            if (endRegex.test(lines[i])) {
-                endLineIndex = i
-                break
-            }
-        }
-
-        let blockTailIndex: number
-        if (endLineIndex !== -1) {
-            blockTailIndex = endLineIndex
-        } else if (nextStartIndex !== -1) {
-            blockTailIndex = nextStartIndex
-        } else {
-            blockTailIndex = sectionEnd
-        }
+        const lines = context.lines
+        const { lastStartIndex } = context
+        let blockTailIndex = context.blockTailIndex
 
         const escapedLabel = this.escapeForRegex(label)
         const metricRegex = new RegExp(
@@ -529,6 +591,51 @@ export default class Logger {
 
         const metricLine = `- ${label} ${parts.join('; ')}`
         lines.splice(blockTailIndex, 0, metricLine)
+
+        await app.vault.modify(file, lines.join('\n'))
+    }
+
+    private async updatePomodoroSectionInterruptLine(
+        file: TFile,
+        samples: number[],
+        label: string,
+    ): Promise<void> {
+        const app = this.plugin.app
+        const context = await this.getPomodoroSectionContext(file)
+        if (!context) {
+            return
+        }
+
+        const lines = context.lines
+        const { lastStartIndex } = context
+        let blockTailIndex = context.blockTailIndex
+
+        const escapedLabel = this.escapeForRegex(label)
+        const interruptRegex = new RegExp(
+            '^\\s*(?:-\\s*)?' + escapedLabel,
+            'i',
+        )
+
+        let i = lastStartIndex + 1
+        while (i < blockTailIndex) {
+            if (interruptRegex.test(lines[i])) {
+                lines.splice(i, 1)
+                blockTailIndex--
+            } else {
+                i++
+            }
+        }
+
+        if (samples.length === 0) {
+            await app.vault.modify(file, lines.join('\n'))
+            return
+        }
+
+        const times = samples.map((elapsedMillis) =>
+            utils.formatMillisAsClock(elapsedMillis),
+        )
+        const line = `- ${label} ${times.join(', ')}`
+        lines.splice(blockTailIndex, 0, line)
 
         await app.vault.modify(file, lines.join('\n'))
     }

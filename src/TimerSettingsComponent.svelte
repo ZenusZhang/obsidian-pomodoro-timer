@@ -1,26 +1,34 @@
 <script lang="ts">
 import { settings } from 'stores'
 
+import { formatMinutesAsClock, parseClockToMillis } from 'utils'
+
 const updateWorkLen = (e: Event) => {
     const target = e.target as HTMLInputElement
-    const value = parseInt(target.value)
     settings.update((s) => {
-        if (value >= 1) {
-            s.workLen = value
+        const millis = parseClockToMillis(target.value)
+        if (millis !== null) {
+            const minutes = millis / 60000
+            if (minutes >= 1) {
+                s.workLen = minutes
+            }
         }
-        target.value = s.workLen.toString()
+        target.value = formatMinutesAsClock(s.workLen)
         return s
     })
 }
 
 const updateBreakLen = (e: Event) => {
     const target = e.target as HTMLInputElement
-    const value = parseInt(target.value)
     settings.update((s) => {
-        if (value >= 0) {
-            s.breakLen = value
+        const millis = parseClockToMillis(target.value)
+        if (millis !== null) {
+            const minutes = millis / 60000
+            if (minutes >= 0) {
+                s.breakLen = minutes
+            }
         }
-        target.value = s.workLen.toString()
+        target.value = formatMinutesAsClock(s.breakLen)
         return s
     })
 }
@@ -32,10 +40,11 @@ const updateBreakLen = (e: Event) => {
             <div class="pomodoro-settings-label">Work</div>
             <div class="pomodoro-settings-control">
                 <input
-                    value={$settings.workLen}
+                    value={formatMinutesAsClock($settings.workLen)}
                     on:change={updateWorkLen}
-                    min="1"
-                    type="number"
+                    inputmode="numeric"
+                    placeholder="mm:ss"
+                    type="text"
                 />
             </div>
         </div>
@@ -43,10 +52,11 @@ const updateBreakLen = (e: Event) => {
             <div class="pomodoro-settings-label">Break</div>
             <div class="pomodoro-settings-control">
                 <input
-                    value={$settings.breakLen}
+                    value={formatMinutesAsClock($settings.breakLen)}
                     on:change={updateBreakLen}
-                    min="0"
-                    type="number"
+                    inputmode="numeric"
+                    placeholder="mm:ss"
+                    type="text"
                 />
             </div>
         </div>
@@ -119,7 +129,7 @@ const updateBreakLen = (e: Event) => {
     border-top: 1px solid var(--background-modifier-border);
 }
 
-.pomodoro-settings-item input[type='number'] {
+.pomodoro-settings-item input {
     /* width: 100%; */
     font-size: 0.8rem;
     border: none;
@@ -129,12 +139,12 @@ const updateBreakLen = (e: Event) => {
     background: transparent;
 }
 
-.pomodoro-settings-item input[type='number']:active {
+.pomodoro-settings-item input:active {
     border: none;
     box-shadow: none;
 }
 
-.pomodoro-settings-item input[type='number']:focus {
+.pomodoro-settings-item input:focus {
     border: none;
     box-shadow: none;
 }
