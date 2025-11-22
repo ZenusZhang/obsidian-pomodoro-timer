@@ -279,7 +279,11 @@ export default class Logger {
 
         // use daily note
         if (settings.logFile === 'DAILY') {
-            return await utils.getDailyNoteFile()
+            const dailyNote = await utils.getDailyNoteFile()
+            if (dailyNote) {
+                return dailyNote
+            }
+            return
         }
 
         // use weekly note

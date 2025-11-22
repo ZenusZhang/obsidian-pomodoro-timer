@@ -1,9 +1,12 @@
-import { type App, TFile, moment } from 'obsidian'
+import { type App, TFile, moment, normalizePath } from 'obsidian'
 import { type TimerLog } from 'Logger'
 import {
     getDailyNote,
     createDailyNote,
     getAllDailyNotes,
+    getDailyNoteSettings,
+    getDateFromFile,
+    DailyNotesFolderMissingError,
     getWeeklyNote,
     createWeeklyNote,
     getAllWeeklyNotes,
@@ -102,12 +105,71 @@ export const join = (...partSegments: string[]): string => {
     return newParts.join('/')
 }
 
-export const getDailyNoteFile = async (): Promise<TFile> => {
-    const file = getDailyNote(moment() as any, getAllDailyNotes())
-    if (!file) {
-        return await createDailyNote(moment() as any)
+export const getDailyNoteFile = async (): Promise<TFile | null> => {
+    const today = moment() as any
+
+    const fromSettings = getDailyNoteFromConfiguredFolder(today)
+    if (fromSettings) {
+        return fromSettings
     }
-    return file
+
+    const scanned = findDailyNoteByScan(today)
+    if (scanned) {
+        return scanned
+    }
+
+    try {
+        return await createDailyNote(today)
+    } catch (error) {
+        console.error('Failed to create daily note', error)
+        return null
+    }
+}
+
+function getDailyNoteFromConfiguredFolder(
+    date: ReturnType<typeof moment>,
+): TFile | null {
+    try {
+        const file = getDailyNote(date as any, getAllDailyNotes())
+        return file ?? null
+    } catch (error) {
+        if (!(error instanceof DailyNotesFolderMissingError)) {
+            console.error('Failed to access configured daily note folder', error)
+        }
+        return null
+    }
+}
+
+function findDailyNoteByScan(date: ReturnType<typeof moment>): TFile | null {
+    const app = (window as any).app as App | undefined
+    if (!app) {
+        return null
+    }
+
+    const matches = app.vault
+        .getMarkdownFiles()
+        .filter((file) => {
+            const fileDate = getDateFromFile(file, 'day')
+            return fileDate?.isSame(date, 'day')
+        })
+
+    if (matches.length === 0) {
+        return null
+    }
+
+    const folderSetting = getDailyNoteSettings()?.folder?.trim()
+    if (folderSetting) {
+        const normalizedFolder = normalizePath(folderSetting)
+        const prefix = normalizedFolder.endsWith('/')
+            ? normalizedFolder
+            : `${normalizedFolder}/`
+        const located = matches.find((file) => file.path.startsWith(prefix))
+        if (located) {
+            return located
+        }
+    }
+
+    return matches[0]
 }
 
 export const getWeeklyNoteFile = async (): Promise<TFile> => {
