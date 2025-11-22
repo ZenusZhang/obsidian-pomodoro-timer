@@ -440,6 +440,7 @@ export default class Timer implements Readable<TimerStore> {
 
     public async start() {
         let isNewSession = false
+        let sessionMode: Mode = this.state.mode
         this.update((s) => {
             let now = new Date().getTime()
             if (!s.inSession) {
@@ -457,6 +458,7 @@ export default class Timer implements Readable<TimerStore> {
                 this.randomPromptCount = 0
                 isNewSession = true
             }
+            sessionMode = s.mode
             s.inSession = true
             s.running = true
             this.clock.postMessage({
@@ -469,13 +471,13 @@ export default class Timer implements Readable<TimerStore> {
             const settings = this.plugin.getSettings()
             const shouldPromptForDetails =
                 settings.logFormat === 'POMODORO_SECTION' &&
-                this.state.mode === 'WORK'
+                sessionMode === 'WORK'
             const shouldAskReward =
                 settings.rewardValueRecord && shouldPromptForDetails
             const shouldAskEnergy =
                 settings.energyLevelRecord && shouldPromptForDetails
 
-            if (this.state.mode === 'WORK' && settings.notificationSound) {
+            if (sessionMode === 'WORK' && settings.notificationSound) {
                 this.playAudio('START')
             }
 
