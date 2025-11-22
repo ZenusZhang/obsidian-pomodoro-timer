@@ -139,16 +139,18 @@ export class RewardValueModal extends Modal {
             }
             if (!this.contentEl.contains(target)) {
                 event.preventDefault()
+                event.stopPropagation()
                 event.stopImmediatePropagation()
             }
         }
         const events: Array<keyof HTMLElementEventMap> = [
+            'pointerdown',
             'mousedown',
             'touchstart',
             'click',
         ]
         for (const evt of events) {
-            this.modalEl.addEventListener(evt, blockOutside, true)
+            this.containerEl.addEventListener(evt, blockOutside, true)
         }
         this.outsideClickHandler = blockOutside
     }
@@ -166,12 +168,13 @@ export class RewardValueModal extends Modal {
             return
         }
         const events: Array<keyof HTMLElementEventMap> = [
+            'pointerdown',
             'mousedown',
             'touchstart',
             'click',
         ]
         for (const evt of events) {
-            this.modalEl.removeEventListener(
+            this.containerEl.removeEventListener(
                 evt,
                 this.outsideClickHandler,
                 true,
@@ -306,16 +309,18 @@ class RewardAndEnergyModal extends Modal {
             }
             if (!this.contentEl.contains(target)) {
                 event.preventDefault()
+                event.stopPropagation()
                 event.stopImmediatePropagation()
             }
         }
         const events: Array<keyof HTMLElementEventMap> = [
+            'pointerdown',
             'mousedown',
             'touchstart',
             'click',
         ]
         for (const evt of events) {
-            this.modalEl.addEventListener(evt, blockOutside, true)
+            this.containerEl.addEventListener(evt, blockOutside, true)
         }
         this.outsideClickHandler = blockOutside
     }
@@ -361,12 +366,13 @@ class RewardAndEnergyModal extends Modal {
             return
         }
         const events: Array<keyof HTMLElementEventMap> = [
+            'pointerdown',
             'mousedown',
             'touchstart',
             'click',
         ]
         for (const evt of events) {
-            this.modalEl.removeEventListener(
+            this.containerEl.removeEventListener(
                 evt,
                 this.outsideClickHandler,
                 true,

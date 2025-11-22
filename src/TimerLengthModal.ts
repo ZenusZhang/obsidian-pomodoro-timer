@@ -15,6 +15,7 @@ export class TimerLengthModal extends Modal {
     private readonly minMinutes: number
     private readonly onSubmit: (value: number | null) => void
     private inputEl!: HTMLInputElement
+    private outsideClickHandler: ((event: Event) => void) | null = null
 
     constructor(
         app: App,
@@ -34,6 +35,7 @@ export class TimerLengthModal extends Modal {
     onOpen() {
         const { contentEl } = this
         contentEl.empty()
+        this.preventOutsideClose()
         contentEl.createEl('h2', { text: this.titleText })
         contentEl.createEl('p', { text: this.descriptionText })
         this.inputEl = contentEl.createEl('input', {
@@ -82,7 +84,52 @@ export class TimerLengthModal extends Modal {
     }
 
     onClose() {
+        this.removeOutsideCloseGuard()
         this.contentEl.empty()
+    }
+
+    private preventOutsideClose() {
+        const blockOutside = (event: Event) => {
+            const target = event.target
+            if (!(target instanceof HTMLElement)) {
+                return
+            }
+            if (!this.contentEl.contains(target)) {
+                event.preventDefault()
+                event.stopPropagation()
+                event.stopImmediatePropagation()
+            }
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'pointerdown',
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.containerEl.addEventListener(evt, blockOutside, true)
+        }
+        this.outsideClickHandler = blockOutside
+    }
+
+    private removeOutsideCloseGuard() {
+        if (!this.outsideClickHandler) {
+            return
+        }
+        const events: Array<keyof HTMLElementEventMap> = [
+            'pointerdown',
+            'mousedown',
+            'touchstart',
+            'click',
+        ]
+        for (const evt of events) {
+            this.containerEl.removeEventListener(
+                evt,
+                this.outsideClickHandler,
+                true,
+            )
+        }
+        this.outsideClickHandler = null
     }
 }
 
