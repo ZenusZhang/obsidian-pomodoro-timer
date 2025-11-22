@@ -151,3 +151,13 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
 
 # 第十轮的修改
 - 2025-11-21 Codex: 使用 gh 将 main.js 所在的 master 推送到 ZenusZhang/obsidian-pomodoro-timer，并在历史中记录（commit 4647798）。
+
+# 第十一轮的需求
+
+对于记录的位置，你应该去搜索daily note的文件。注意，daily note是obsidian的一个默认功能，点击之后会生成当天的笔记。
+但它的格式，目录可能被用户自定义，你应该去搜索它的逻辑，然后找到daily note这个文件，如果没有daily note, 那请你创建daily note。
+
+# 第十一轮的修改
+- 2025-11-22 Codex: 增强 daily note 定位和创建流程（commit ec9995d）：
+  - 优先根据每日笔记设置检索，当配置文件夹缺失时不会报错。
+  - 退回遍历仓库匹配当天笔记并在未找到时自动创建，避免日志记录找不到落盘位置。
