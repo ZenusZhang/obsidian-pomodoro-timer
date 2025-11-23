@@ -9,6 +9,7 @@ import DEFAULT_NOTIFICATION from 'Notification'
 import REWARD_NOTIFICATION from 'RewardNotification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
+import type { RandomTimerDensity } from 'Settings'
 import { askRewardAndEnergy, askRewardValue } from 'RewardValueModal'
 import { askPomodoroStartInfo } from 'PomodoroStartModal'
 import { askForTimerLength } from 'TimerLengthModal'
@@ -206,6 +207,25 @@ export default class Timer implements Readable<TimerStore> {
         }
     }
 
+    private getRandomPromptRange(
+        density: RandomTimerDensity,
+        isFirstReminder: boolean,
+    ) {
+        if (density === 'SPARSE') {
+            return { min: 10, max: 15 }
+        }
+
+        if (isFirstReminder) {
+            return { min: 2, max: 3 }
+        }
+
+        if (density === 'MEDIUM') {
+            return { min: 5, max: 10 }
+        }
+
+        return { min: 4, max: 7 }
+    }
+
     private scheduleRandomPrompt() {
         const settings = this.plugin.getSettings()
         if (
@@ -228,9 +248,12 @@ export default class Timer implements Readable<TimerStore> {
         this.clearRandomPromptTimeout()
 
         const isFirstReminder = this.randomPromptCount === 0
-        const minDelay = isFirstReminder ? 2 : 3
-        const maxDelay = isFirstReminder ? 3 : 6
-        const delayMinutes = minDelay + Math.random() * (maxDelay - minDelay)
+        const density = settings.randomTimerDensity ?? 'MEDIUM'
+        const { min, max } = this.getRandomPromptRange(
+            density,
+            isFirstReminder,
+        )
+        const delayMinutes = min + Math.random() * (max - min)
         const delayMillis = Math.round(delayMinutes * 60 * 1000)
         this.randomPromptTimeout = window.setTimeout(() => {
             void this.handleRandomPrompt()

@@ -3,6 +3,7 @@ import { Notice } from 'obsidian'
 import type Timer from 'Timer'
 import { get } from 'svelte/store'
 import { settings } from 'stores'
+import type { RandomTimerDensity } from 'Settings'
 
 import { formatMinutesAsClock, parseClockToMillis } from 'utils'
 
@@ -43,7 +44,10 @@ const isRecordToggle = (key: ToggleKey) =>
     key === 'rewardValueRecord' || key === 'energyLevelRecord'
 
 let recordLocked = false
+let shouldShowRandomDensity = false
 $: recordLocked = Boolean($timer?.running)
+$: shouldShowRandomDensity =
+    $settings.rewardValueRecord || $settings.energyLevelRecord
 
 const updateToggle = (key: ToggleKey) => (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -60,6 +64,24 @@ const updateToggle = (key: ToggleKey) => (e: Event) => {
             return current
         }
         return { ...current, [key]: checked }
+    })
+}
+
+const updateRandomTimerDensity = (e: Event) => {
+    const target = e.target as HTMLSelectElement
+    const density = target.value as RandomTimerDensity
+
+    if (recordLocked) {
+        target.value = get(settings).randomTimerDensity
+        new Notice(RECORD_LOCK_MESSAGE)
+        return
+    }
+
+    settings.update((current) => {
+        if (current.randomTimerDensity === density) {
+            return current
+        }
+        return { ...current, randomTimerDensity: density }
     })
 }
 </script>
@@ -142,6 +164,23 @@ const updateToggle = (key: ToggleKey) => (e: Event) => {
                 />
             </div>
         </div>
+        {#if shouldShowRandomDensity}
+            <div class="pomodoro-settings-item">
+                <div class="pomodoro-settings-label">
+                    Random timer density
+                </div>
+                <div class="pomodoro-settings-control">
+                    <select
+                        on:change={updateRandomTimerDensity}
+                        value={$settings.randomTimerDensity}
+                    >
+                        <option value="SPARSE">Sparse</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="DENSE">Dense</option>
+                    </select>
+                </div>
+            </div>
+        {/if}
     </div>
 </div>
 
@@ -192,5 +231,13 @@ const updateToggle = (key: ToggleKey) => (e: Event) => {
 
 .pomodoro-settings-item input[type='checkbox'] {
     accent-color: var(--text-normal);
+}
+
+.pomodoro-settings-item select {
+    font-size: 0.8rem;
+    border: 1px solid var(--background-modifier-border);
+    background: transparent;
+    border-radius: 3px;
+    padding: 2px 6px;
 }
 </style>

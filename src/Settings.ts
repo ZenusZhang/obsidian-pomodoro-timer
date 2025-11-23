@@ -13,6 +13,7 @@ type LogFileType = 'DAILY' | 'WEEKLY' | 'FILE' | 'NONE'
 type LogLevel = 'ALL' | 'WORK' | 'BREAK'
 type LogFormat = 'SIMPLE' | 'VERBOSE' | 'CUSTOM' | 'POMODORO_SECTION'
 export type TaskFormat = 'TASKS' | 'DATAVIEW'
+export type RandomTimerDensity = 'SPARSE' | 'MEDIUM' | 'DENSE'
 
 export interface Settings {
     workLen: number
@@ -34,6 +35,7 @@ export interface Settings {
     lowFps: boolean
     rewardValueRecord: boolean
     energyLevelRecord: boolean
+    randomTimerDensity: RandomTimerDensity
 }
 
 export default class PomodoroSettings extends PluginSettingTab {
@@ -57,6 +59,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         lowFps: false,
         rewardValueRecord: false,
         energyLevelRecord: false,
+        randomTimerDensity: 'MEDIUM',
     }
 
     static settings: Writable<Settings> = writable(
