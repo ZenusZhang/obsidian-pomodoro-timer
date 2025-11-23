@@ -202,3 +202,8 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
 - 2025-11-23 Codex: 完成第十五轮需求（commit 2d821ce）：
   - 勾选 RVR/ELR 时新增 Random timer density 选项（Sparse/Medium/Dense），运行中调整会提示需待计时结束。
   - 随机提醒间隔根据密度分档：稀疏 10–15 分钟，中等 5–10 分钟，密集 4–7 分钟，首个短间隔仅应用于中等与密集。
+
+# 第十六轮的修改
+- 2025-11-23 Codex: 重新生成 main.js 并修复生产构建死锁（commit b68efd6）：
+  - 生产模式改为直接调用 esbuild.build，避免 context.rebuild 与内联 worker 插件导致阻塞。
+  - 运行 npm run build 成功完成 main.js 构建。
