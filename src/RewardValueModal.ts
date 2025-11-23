@@ -144,12 +144,12 @@ export class RewardValueModal extends Modal {
         this.outsideClickHandler = blockOutside
     }
 
-    private confirmSkipIfIncomplete(): boolean {
+    private confirmSkip(): boolean {
         const hasEmpty = (this.inputEl?.value?.trim() ?? '').length === 0
-        if (!hasEmpty) {
-            return true
-        }
-        return window.confirm('仍有未填写的内容，确定要跳过吗？')
+        const message = hasEmpty
+            ? '仍有未填写的内容，确定要跳过吗？'
+            : '确定要跳过当前提醒吗？'
+        return window.confirm(message)
     }
 
     private registerKeyboardShortcuts() {
@@ -169,7 +169,7 @@ export class RewardValueModal extends Modal {
     }
 
     private cancel() {
-        if (!this.confirmSkipIfIncomplete()) {
+        if (!this.confirmSkip()) {
             return
         }
         this.value = null
@@ -359,14 +359,14 @@ class RewardAndEnergyModal extends Modal {
         return Math.max(0, Math.min(max, numeric))
     }
 
-    private confirmSkipIfIncomplete(): boolean {
+    private confirmSkip(): boolean {
         const rewardValue = this.rewardInput?.value?.trim() ?? ''
         const energyValue = this.energyInput?.value?.trim() ?? ''
         const hasEmpty = rewardValue.length === 0 || energyValue.length === 0
-        if (!hasEmpty) {
-            return true
-        }
-        return window.confirm('仍有未填写的内容，确定要跳过吗？')
+        const message = hasEmpty
+            ? '仍有未填写的内容，确定要跳过吗？'
+            : '确定要跳过当前提醒吗？'
+        return window.confirm(message)
     }
 
     private registerKeyboardShortcuts() {
@@ -384,7 +384,7 @@ class RewardAndEnergyModal extends Modal {
     }
 
     private cancel() {
-        if (!this.confirmSkipIfIncomplete()) {
+        if (!this.confirmSkip()) {
             return
         }
         this.resolved = true

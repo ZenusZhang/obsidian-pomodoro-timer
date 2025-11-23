@@ -190,7 +190,7 @@ class PomodoroStartModal extends Modal {
         }
     }
 
-    private confirmSkipIfIncomplete(): boolean {
+    private confirmSkip(): boolean {
         const fields: string[] = []
         fields.push(this.descriptionInput.value?.trim() ?? '')
         if (this.includeRewardInput) {
@@ -200,10 +200,10 @@ class PomodoroStartModal extends Modal {
             fields.push(this.energyInput?.value?.trim() ?? '')
         }
         const hasEmpty = fields.some((value) => value.length === 0)
-        if (!hasEmpty) {
-            return true
-        }
-        return window.confirm('仍有未填写的内容，确定要跳过吗？')
+        const message = hasEmpty
+            ? '仍有未填写的内容，确定要跳过吗？'
+            : '确定要跳过当前提醒吗？'
+        return window.confirm(message)
     }
 
     private registerKeyboardShortcuts() {
@@ -221,7 +221,7 @@ class PomodoroStartModal extends Modal {
     }
 
     private skip() {
-        if (!this.confirmSkipIfIncomplete()) {
+        if (!this.confirmSkip()) {
             return
         }
         this.descriptionInput.value = ''

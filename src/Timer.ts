@@ -125,8 +125,12 @@ export default class Timer implements Readable<TimerStore> {
     private audioContext: AudioContext | null = null
 
     private startAudio: HTMLAudioElement | null = null
+    private reviewAudio: HTMLAudioElement | null = null
 
     private randomPromptCount = 0
+
+    private reviewStartNotified = false
+    private reviewEndingNotified = false
 
     constructor(plugin: PomodoroTimerPlugin) {
         this.plugin = plugin
@@ -207,6 +211,11 @@ export default class Timer implements Readable<TimerStore> {
         }
     }
 
+    private resetReviewReminders() {
+        this.reviewStartNotified = false
+        this.reviewEndingNotified = false
+    }
+
     private getRandomPromptRange(
         density: RandomTimerDensity,
         isFirstReminder: boolean,
@@ -260,6 +269,38 @@ export default class Timer implements Readable<TimerStore> {
         }, delayMillis)
     }
 
+    private maybeTriggerReviewReminders(state: TimerState) {
+        if (
+            state.mode !== 'WORK' ||
+            !state.inSession ||
+            !state.running
+        ) {
+            return
+        }
+
+        const twoMinutes = 2 * 60 * 1000
+        const elapsedMillis = state.elapsed
+        const remainingMillis = Math.max(0, state.count - state.elapsed)
+
+        if (
+            !this.reviewStartNotified &&
+            state.count > twoMinutes &&
+            elapsedMillis >= twoMinutes
+        ) {
+            this.reviewStartNotified = true
+            this.playReviewAudio()
+        }
+
+        if (
+            !this.reviewEndingNotified &&
+            state.count > twoMinutes &&
+            remainingMillis <= twoMinutes
+        ) {
+            this.reviewEndingNotified = true
+            this.playReviewAudio()
+        }
+    }
+
     private tick(t: number) {
         let timeup: boolean = false
         let pause: boolean = false
@@ -275,6 +316,9 @@ export default class Timer implements Readable<TimerStore> {
             }
             return s
         })
+        if (!pause) {
+            this.maybeTriggerReviewReminders(this.state)
+        }
         if (!pause && timeup) {
             this.timeup()
         }
@@ -479,6 +523,7 @@ export default class Timer implements Readable<TimerStore> {
                 s.innerInterrupts = []
                 s.outerInterrupts = []
                 this.randomPromptCount = 0
+                this.resetReviewReminders()
                 isNewSession = true
             }
             sessionMode = s.mode
@@ -565,6 +610,7 @@ export default class Timer implements Readable<TimerStore> {
         state.running = false
         this.clearRandomPromptTimeout()
         this.randomPromptCount = 0
+        this.resetReviewReminders()
         this.clock.postMessage({
             start: false,
             lowFps: this.plugin.getSettings().lowFps,
@@ -609,7 +655,10 @@ export default class Timer implements Readable<TimerStore> {
             new Notice(fragment)
         }
 
-        if (this.plugin.getSettings().notificationSound) {
+        if (
+            this.plugin.getSettings().notificationSound &&
+            state.mode === 'WORK'
+        ) {
             this.playAudio('END')
         }
     }
@@ -666,6 +715,7 @@ export default class Timer implements Readable<TimerStore> {
             state.inSession = false
             state.running = false
             this.clearRandomPromptTimeout()
+            this.resetReviewReminders()
 
             if (!this.plugin.tracker!.pinned) {
                 this.plugin.tracker!.clear()
@@ -791,6 +841,47 @@ export default class Timer implements Readable<TimerStore> {
         if (!played) {
             this.playDefaultAudioClip()
         }
+    }
+
+    private playReviewAudio() {
+        const reviewClip = this.getReviewAudio()
+        if (reviewClip) {
+            try {
+                reviewClip.currentTime = 0
+                reviewClip.volume = 1
+                const playPromise = reviewClip.play()
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    void playPromise.catch(() => {
+                        this.playRewardAudio()
+                    })
+                }
+                return
+            } catch (error) {
+                console.warn('Failed to play review audio sample', error)
+            }
+        }
+
+        this.playRewardAudio()
+    }
+
+    private getReviewAudio(): HTMLAudioElement | null {
+        if (this.reviewAudio) {
+            return this.reviewAudio
+        }
+        const relativePath = `.obsidian/plugins/${this.plugin.manifest.id}/assets/pomodorotechnique/review.wav`
+        try {
+            const soundFile =
+                this.plugin.app.vault.getAbstractFileByPath(relativePath)
+            if (soundFile && soundFile instanceof TFile) {
+                const soundSrc =
+                    this.plugin.app.vault.getResourcePath(soundFile)
+                this.reviewAudio = new Audio(soundSrc)
+                return this.reviewAudio
+            }
+        } catch (error) {
+            console.warn('Failed to load review audio from assets', error)
+        }
+        return null
     }
 
     public playRewardAudio() {
