@@ -111,19 +111,9 @@ class PomodoroStartModal extends Modal {
         confirmButton.addEventListener('click', () => this.submit())
 
         const skipButton = buttonRow.createEl('button', { text: '跳过' })
-        skipButton.addEventListener('click', () => {
-            if (!this.confirmSkipIfIncomplete()) {
-                return
-            }
-            this.descriptionInput.value = ''
-            if (this.rewardInput) {
-                this.rewardInput.value = ''
-            }
-            if (this.energyInput) {
-                this.energyInput.value = ''
-            }
-            this.submit()
-        })
+        skipButton.addEventListener('click', () => this.skip())
+
+        this.registerKeyboardShortcuts()
 
         window.setTimeout(() => {
             this.descriptionInput.focus()
@@ -214,6 +204,34 @@ class PomodoroStartModal extends Modal {
             return true
         }
         return window.confirm('仍有未填写的内容，确定要跳过吗？')
+    }
+
+    private registerKeyboardShortcuts() {
+        this.scope.register([], 'Enter', (event) => {
+            if (event?.isComposing || event?.shiftKey) {
+                return
+            }
+            event?.preventDefault()
+            this.submit()
+        })
+        this.scope.register([], 'Escape', (event) => {
+            event?.preventDefault()
+            this.skip()
+        })
+    }
+
+    private skip() {
+        if (!this.confirmSkipIfIncomplete()) {
+            return
+        }
+        this.descriptionInput.value = ''
+        if (this.rewardInput) {
+            this.rewardInput.value = ''
+        }
+        if (this.energyInput) {
+            this.energyInput.value = ''
+        }
+        this.submit()
     }
 
     private removeOutsideCloseGuard() {

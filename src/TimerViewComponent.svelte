@@ -253,7 +253,7 @@ const recordInterrupt = (kind: 'INNER' | 'OUTER') => {
         {#if extra == 'tasks'}
             <TasksComponent {tasks} {tracker} {render} />
         {:else if extra == 'settings'}
-            <TimerSettingsComponent />
+            <TimerSettingsComponent {timer} />
         {/if}
     </div>
 </div>

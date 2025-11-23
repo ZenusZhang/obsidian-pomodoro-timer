@@ -43,21 +43,14 @@ export class TimerLengthModal extends Modal {
             value: formatMinutesAsClock(this.initialMinutes),
         })
         this.inputEl.placeholder = 'mm:ss'
-        this.inputEl.addEventListener('keydown', (event: KeyboardEvent) => {
-            if (event.key === 'Enter') {
-                event.preventDefault()
-                this.submit()
-            }
-        })
 
         const buttonRow = contentEl.createDiv({ cls: 'timer-length-buttons' })
         const confirmBtn = buttonRow.createEl('button', { text: '确定' })
         confirmBtn.addEventListener('click', () => this.submit())
         const cancelBtn = buttonRow.createEl('button', { text: '取消' })
-        cancelBtn.addEventListener('click', () => {
-            this.onSubmit(null)
-            this.close()
-        })
+        cancelBtn.addEventListener('click', () => this.cancel())
+
+        this.registerKeyboardShortcuts()
 
         window.setTimeout(() => {
             this.inputEl.focus()
@@ -83,9 +76,28 @@ export class TimerLengthModal extends Modal {
         this.close()
     }
 
+    private cancel() {
+        this.onSubmit(null)
+        this.close()
+    }
+
     onClose() {
         this.removeOutsideCloseGuard()
         this.contentEl.empty()
+    }
+
+    private registerKeyboardShortcuts() {
+        this.scope.register([], 'Enter', (event) => {
+            if (event?.isComposing || event?.shiftKey) {
+                return
+            }
+            event?.preventDefault()
+            this.submit()
+        })
+        this.scope.register([], 'Escape', (event) => {
+            event?.preventDefault()
+            this.cancel()
+        })
     }
 
     private preventOutsideClose() {

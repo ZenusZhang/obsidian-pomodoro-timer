@@ -1,7 +1,12 @@
 <script lang="ts">
+import { Notice } from 'obsidian'
+import type Timer from 'Timer'
+import { get } from 'svelte/store'
 import { settings } from 'stores'
 
 import { formatMinutesAsClock, parseClockToMillis } from 'utils'
+
+export let timer: Timer
 
 type DurationKey = 'workLen' | 'breakLen'
 type ToggleKey =
@@ -10,6 +15,8 @@ type ToggleKey =
     | 'logFocused'
     | 'rewardValueRecord'
     | 'energyLevelRecord'
+
+const RECORD_LOCK_MESSAGE = '只有在番茄钟没有计时时能修改'
 
 const updateTimerLen = (key: DurationKey, minMinutes: number) => (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -32,9 +39,22 @@ const updateTimerLen = (key: DurationKey, minMinutes: number) => (e: Event) => {
 const updateWorkLen = updateTimerLen('workLen', 1)
 const updateBreakLen = updateTimerLen('breakLen', 0)
 
+const isRecordToggle = (key: ToggleKey) =>
+    key === 'rewardValueRecord' || key === 'energyLevelRecord'
+
+let recordLocked = false
+$: recordLocked = Boolean($timer?.running)
+
 const updateToggle = (key: ToggleKey) => (e: Event) => {
     const target = e.target as HTMLInputElement
     const checked = target.checked
+
+    if (isRecordToggle(key) && recordLocked) {
+        target.checked = get(settings)[key]
+        new Notice(RECORD_LOCK_MESSAGE)
+        return
+    }
+
     settings.update((current) => {
         if (current[key] === checked) {
             return current

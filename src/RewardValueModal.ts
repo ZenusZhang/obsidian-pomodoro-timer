@@ -76,13 +76,6 @@ export class RewardValueModal extends Modal {
             this.inputEl.value = `${this.initial}`
         }
 
-        this.inputEl.addEventListener('keydown', (event: KeyboardEvent) => {
-            if (event.key === 'Enter') {
-                event.preventDefault()
-                this.submit(this.inputEl!)
-            }
-        })
-
         const buttonWrapper = contentEl.createDiv({
             cls: 'reward-button-wrapper',
         })
@@ -98,13 +91,9 @@ export class RewardValueModal extends Modal {
         const cancelButton = buttonWrapper.createEl('button', {
             text: '跳过',
         })
-        cancelButton.addEventListener('click', () => {
-            if (!this.confirmSkipIfIncomplete()) {
-                return
-            }
-            this.value = null
-            this.close()
-        })
+        cancelButton.addEventListener('click', () => this.cancel())
+
+        this.registerKeyboardShortcuts()
 
         // Focus the input by default
         window.setTimeout(() => {
@@ -161,6 +150,30 @@ export class RewardValueModal extends Modal {
             return true
         }
         return window.confirm('仍有未填写的内容，确定要跳过吗？')
+    }
+
+    private registerKeyboardShortcuts() {
+        this.scope.register([], 'Enter', (event) => {
+            if (event?.isComposing || event?.shiftKey) {
+                return
+            }
+            event?.preventDefault()
+            if (this.inputEl) {
+                this.submit(this.inputEl)
+            }
+        })
+        this.scope.register([], 'Escape', (event) => {
+            event?.preventDefault()
+            this.cancel()
+        })
+    }
+
+    private cancel() {
+        if (!this.confirmSkipIfIncomplete()) {
+            return
+        }
+        this.value = null
+        this.close()
     }
 
     private removeOutsideCloseGuard() {
@@ -277,14 +290,9 @@ class RewardAndEnergyModal extends Modal {
         const cancelButton = buttonWrapper.createEl('button', {
             text: '跳过',
         })
-        cancelButton.addEventListener('click', () => {
-            if (!this.confirmSkipIfIncomplete()) {
-                return
-            }
-            this.resolved = true
-            this.onResult(null)
-            this.close()
-        })
+        cancelButton.addEventListener('click', () => this.cancel())
+
+        this.registerKeyboardShortcuts()
 
         window.setTimeout(() => {
             this.rewardInput.focus()
@@ -359,6 +367,29 @@ class RewardAndEnergyModal extends Modal {
             return true
         }
         return window.confirm('仍有未填写的内容，确定要跳过吗？')
+    }
+
+    private registerKeyboardShortcuts() {
+        this.scope.register([], 'Enter', (event) => {
+            if (event?.isComposing || event?.shiftKey) {
+                return
+            }
+            event?.preventDefault()
+            this.submit()
+        })
+        this.scope.register([], 'Escape', (event) => {
+            event?.preventDefault()
+            this.cancel()
+        })
+    }
+
+    private cancel() {
+        if (!this.confirmSkipIfIncomplete()) {
+            return
+        }
+        this.resolved = true
+        this.onResult(null)
+        this.close()
     }
 
     private removeOutsideCloseGuard() {
