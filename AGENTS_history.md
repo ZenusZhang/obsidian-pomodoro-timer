@@ -187,3 +187,18 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
 - 2025-11-23 Codex: 完成第十四轮需求（commit 6276ee9）：
   - 计时进行中禁止切换 Reward Value Record 与 Energy Level Record，并提示需在未计时时修改。
   - 番茄开始、RVR/ELR 单/双输入及时长调整弹窗支持回车确认、ESC 取消，沿用空白确认逻辑。
+
+# 第十五轮的需求
+我希望在勾选了RVR/ELR时，会出现一个random timer 密度的setting，分为三个档，(稀疏，中等，密集).(注意，这个新选项的文本应该是英文）
+
+对于稀疏，random timer的时间在10~15min 
+对于中等，random timer的时间在5~10 min
+对于密集，random timer的时间在4~7 min
+
+第一个短的timer只对中等和密集有效.
+你可以在这个文档中搜索random timer来获得更多关于random timer的信息
+
+# 第十五轮的修改
+- 2025-11-23 Codex: 完成第十五轮需求（commit 2d821ce）：
+  - 勾选 RVR/ELR 时新增 Random timer density 选项（Sparse/Medium/Dense），运行中调整会提示需待计时结束。
+  - 随机提醒间隔根据密度分档：稀疏 10–15 分钟，中等 5–10 分钟，密集 4–7 分钟，首个短间隔仅应用于中等与密集。
