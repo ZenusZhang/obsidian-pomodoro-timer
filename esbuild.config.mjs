@@ -66,7 +66,7 @@ let inlineWorkerPlugin = {
         )
     },
 }
-const context = await esbuild.context({
+const options = {
     banner: {
         js: banner,
     },
@@ -101,11 +101,12 @@ const context = await esbuild.context({
     sourcemap: prod ? false : 'inline',
     treeShaking: true,
     outfile: 'main.js',
-})
+}
 
 if (prod) {
-    await context.rebuild()
+    await esbuild.build(options)
     process.exit(0)
-} else {
-    await context.watch()
 }
+
+const context = await esbuild.context(options)
+await context.watch()
