@@ -337,6 +337,13 @@ class RewardAndEnergyModal extends Modal {
         const rewardValue = this.rewardInput.value?.trim()
         const energyValue = this.energyInput.value?.trim()
 
+        const hasEmpty =
+            (rewardValue?.length ?? 0) === 0 ||
+            (energyValue?.length ?? 0) === 0
+        if (hasEmpty && !this.confirmSkip()) {
+            return
+        }
+
         const parsedReward = this.parseValue(rewardValue, 5)
         const parsedEnergy = this.parseValue(energyValue, 10)
 

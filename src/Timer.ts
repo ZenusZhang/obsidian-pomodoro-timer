@@ -123,6 +123,11 @@ export default class Timer implements Readable<TimerStore> {
     private randomPromptTimeout: number | null = null
 
     private audioContext: AudioContext | null = null
+    private audioSources = new WeakMap<
+        HTMLAudioElement,
+        MediaElementAudioSourceNode
+    >()
+    private audioGainNodes = new WeakMap<HTMLAudioElement, GainNode>()
 
     private startAudio: HTMLAudioElement | null = null
     private reviewAudio: HTMLAudioElement | null = null
@@ -835,7 +840,7 @@ export default class Timer implements Readable<TimerStore> {
         const played = this.playPianoMelody(melody, {
             noteDuration: 0.28,
             gap: 0.04,
-            volume: 0.22,
+            volume: 0.4,
         })
 
         if (!played) {
@@ -846,18 +851,12 @@ export default class Timer implements Readable<TimerStore> {
     private playReviewAudio() {
         const reviewClip = this.getReviewAudio()
         if (reviewClip) {
-            try {
-                reviewClip.currentTime = 0
-                reviewClip.volume = 1
-                const playPromise = reviewClip.play()
-                if (playPromise && typeof playPromise.catch === 'function') {
-                    void playPromise.catch(() => {
-                        this.playRewardAudio()
-                    })
-                }
+            const played = this.playAudioElement(reviewClip, {
+                gain: 1.8,
+                fallback: () => this.playRewardAudio(),
+            })
+            if (played) {
                 return
-            } catch (error) {
-                console.warn('Failed to play review audio sample', error)
             }
         }
 
@@ -887,18 +886,12 @@ export default class Timer implements Readable<TimerStore> {
     public playRewardAudio() {
         const rewardAudio = Timer.REWARD_NOTIFICATION_AUDIO
         if (rewardAudio) {
-            rewardAudio.currentTime = 0
-            rewardAudio.volume = 1
-            try {
-                const playPromise = rewardAudio.play()
-                if (playPromise && typeof playPromise.catch === 'function') {
-                    void playPromise.catch(() => {
-                        this.playFallbackRewardTone()
-                    })
-                }
+            const played = this.playAudioElement(rewardAudio, {
+                gain: 1.8,
+                fallback: () => this.playFallbackRewardTone(),
+            })
+            if (played) {
                 return
-            } catch (error) {
-                console.warn('Failed to play reward audio sample', error)
             }
         }
 
@@ -909,7 +902,7 @@ export default class Timer implements Readable<TimerStore> {
         const played = this.playPianoMelody([STANDARD_DO_FREQUENCY], {
             noteDuration: 0.85,
             gap: 0,
-            volume: 0.3,
+            volume: 0.5,
         })
 
         if (!played) {
@@ -922,20 +915,10 @@ export default class Timer implements Readable<TimerStore> {
         if (!startAudio) {
             return false
         }
-        try {
-            startAudio.currentTime = 0
-            startAudio.volume = 1
-            const playPromise = startAudio.play()
-            if (playPromise && typeof playPromise.catch === 'function') {
-                void playPromise.catch(() => {
-                    this.playDefaultAudioClip()
-                })
-            }
-            return true
-        } catch (error) {
-            console.warn('Failed to play start audio sample', error)
-        }
-        return false
+        return this.playAudioElement(startAudio, {
+            gain: 1.8,
+            fallback: () => this.playDefaultAudioClip(),
+        })
     }
 
     private getStartAudio(): HTMLAudioElement | null {
@@ -964,17 +947,14 @@ export default class Timer implements Readable<TimerStore> {
         if (soundFile && soundFile instanceof TFile) {
             const soundSrc = this.plugin.app.vault.getResourcePath(soundFile)
             const audio = new Audio(soundSrc)
-            audio.currentTime = 0
-            void audio.play()
-            return true
+            return this.playAudioElement(audio, { gain: 1.8 })
         }
         return false
     }
 
     private playDefaultAudioClip() {
         const audio = Timer.DEFAULT_NOTIFICATION_AUDIO
-        audio.currentTime = 0
-        void audio.play()
+        this.playAudioElement(audio, { gain: 1.6 })
     }
 
     private getAudioContext(): AudioContext | null {
@@ -1001,6 +981,44 @@ export default class Timer implements Readable<TimerStore> {
         return this.audioContext
     }
 
+    private playAudioElement(
+        audio: HTMLAudioElement,
+        options?: { gain?: number; fallback?: () => void },
+    ): boolean {
+        try {
+            const gain = options?.gain ?? 1
+            const ctx = this.getAudioContext()
+            if (ctx) {
+                let source = this.audioSources.get(audio)
+                if (!source) {
+                    source = ctx.createMediaElementSource(audio)
+                    this.audioSources.set(audio, source)
+                }
+                let gainNode = this.audioGainNodes.get(audio)
+                if (!gainNode) {
+                    gainNode = ctx.createGain()
+                    this.audioGainNodes.set(audio, gainNode)
+                    source.connect(gainNode)
+                    gainNode.connect(ctx.destination)
+                }
+                gainNode.gain.value = gain
+            }
+
+            audio.currentTime = 0
+            audio.volume = 1
+            const playPromise = audio.play()
+            if (playPromise && typeof playPromise.catch === 'function') {
+                void playPromise.catch(() => {
+                    options?.fallback?.()
+                })
+            }
+            return true
+        } catch (error) {
+            console.warn('Failed to play audio element', error)
+        }
+        return false
+    }
+
     private playPianoMelody(
         notes: number[],
         options?: { noteDuration?: number; gap?: number; volume?: number },
@@ -1012,7 +1030,7 @@ export default class Timer implements Readable<TimerStore> {
 
         const duration = options?.noteDuration ?? 0.35
         const gap = options?.gap ?? 0.05
-        const volume = options?.volume ?? 0.25
+        const volume = options?.volume ?? 0.4
         const startAt = ctx.currentTime
 
         notes.forEach((frequency, index) => {
