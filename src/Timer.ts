@@ -13,7 +13,7 @@ import type { RandomTimerDensity } from 'Settings'
 import { askRewardAndEnergy, askRewardValue } from 'RewardValueModal'
 import { askPomodoroStartInfo } from 'PomodoroStartModal'
 import { askForTimerLength } from 'TimerLengthModal'
-import { formatMinutesAsClock } from 'utils'
+import { formatMillisAsClock, formatMinutesAsClock } from 'utils'
 
 const NOTE_FREQUENCIES = {
     C3: 130.81,
@@ -625,12 +625,14 @@ export default class Timer implements Readable<TimerStore> {
         return state
     }
 
-    private notify(state: TimerState, logFile: TFile | void) {
+    private notify(state: LogContext, logFile: TFile | void) {
         const emoji = state.mode == 'WORK' ? '🍅' : '🥤'
-        const durationText = formatMinutesAsClock(state.duration)
+        const elapsedText = formatMillisAsClock(
+            Math.max(0, Math.round(state.elapsed)),
+        )
         const text = `${emoji} You have been ${
             state.mode === 'WORK' ? 'working' : 'breaking'
-        } for ${durationText}.`
+        } for ${elapsedText}.`
 
         if (this.plugin.getSettings().useSystemNotification) {
             const Notification = (require('electron') as any).remote

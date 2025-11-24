@@ -1,4 +1,5 @@
 import { App, Modal } from 'obsidian'
+import { confirmWithModal } from 'ConfirmModal'
 
 export interface PomodoroStartModalResult {
     description: string
@@ -111,7 +112,9 @@ class PomodoroStartModal extends Modal {
         confirmButton.addEventListener('click', () => this.submit())
 
         const skipButton = buttonRow.createEl('button', { text: '跳过' })
-        skipButton.addEventListener('click', () => this.skip())
+        skipButton.addEventListener('click', () => {
+            void this.skip()
+        })
 
         this.registerKeyboardShortcuts()
 
@@ -190,7 +193,7 @@ class PomodoroStartModal extends Modal {
         }
     }
 
-    private confirmSkip(): boolean {
+    private async confirmSkip(): Promise<boolean> {
         const fields: string[] = []
         fields.push(this.descriptionInput.value?.trim() ?? '')
         if (this.includeRewardInput) {
@@ -203,7 +206,13 @@ class PomodoroStartModal extends Modal {
         const message = hasEmpty
             ? '仍有未填写的内容，确定要跳过吗？'
             : '确定要跳过当前提醒吗？'
-        return window.confirm(message)
+        return await confirmWithModal(
+            this.app,
+            message,
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : this.descriptionInput,
+        )
     }
 
     private registerKeyboardShortcuts() {
@@ -216,12 +225,23 @@ class PomodoroStartModal extends Modal {
         })
         this.scope.register([], 'Escape', (event) => {
             event?.preventDefault()
-            this.skip()
+            void this.skip()
         })
     }
 
-    private skip() {
-        if (!this.confirmSkip()) {
+    private focusPrimaryInput() {
+        window.setTimeout(() => {
+            if (this.descriptionInput) {
+                this.descriptionInput.focus()
+                this.descriptionInput.select()
+            }
+        }, 0)
+    }
+
+    private async skip() {
+        const shouldSkip = await this.confirmSkip()
+        if (!shouldSkip) {
+            this.focusPrimaryInput()
             return
         }
         this.descriptionInput.value = ''

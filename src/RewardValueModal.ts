@@ -1,4 +1,5 @@
 import { App, Modal } from 'obsidian'
+import { confirmWithModal } from 'ConfirmModal'
 
 export type RewardValueKind = 'EXPECTED' | 'ACTUAL' | 'ENERGY'
 
@@ -91,7 +92,9 @@ export class RewardValueModal extends Modal {
         const cancelButton = buttonWrapper.createEl('button', {
             text: '跳过',
         })
-        cancelButton.addEventListener('click', () => this.cancel())
+        cancelButton.addEventListener('click', () => {
+            void this.cancel()
+        })
 
         this.registerKeyboardShortcuts()
 
@@ -144,12 +147,16 @@ export class RewardValueModal extends Modal {
         this.outsideClickHandler = blockOutside
     }
 
-    private confirmSkip(): boolean {
+    private async confirmSkip(): Promise<boolean> {
         const hasEmpty = (this.inputEl?.value?.trim() ?? '').length === 0
         const message = hasEmpty
             ? '仍有未填写的内容，确定要跳过吗？'
             : '确定要跳过当前提醒吗？'
-        return window.confirm(message)
+        return await confirmWithModal(
+            this.app,
+            message,
+            this.inputEl ?? (document.activeElement as HTMLElement | null),
+        )
     }
 
     private registerKeyboardShortcuts() {
@@ -164,16 +171,25 @@ export class RewardValueModal extends Modal {
         })
         this.scope.register([], 'Escape', (event) => {
             event?.preventDefault()
-            this.cancel()
+            void this.cancel()
         })
     }
 
-    private cancel() {
-        if (!this.confirmSkip()) {
+    private async cancel() {
+        const shouldSkip = await this.confirmSkip()
+        if (!shouldSkip) {
+            this.refocusInput()
             return
         }
         this.value = null
         this.close()
+    }
+
+    private refocusInput() {
+        window.setTimeout(() => {
+            this.inputEl?.focus()
+            this.inputEl?.select()
+        }, 0)
     }
 
     private removeOutsideCloseGuard() {
@@ -285,12 +301,16 @@ class RewardAndEnergyModal extends Modal {
             cls: 'reward-button-wrapper',
         })
         const okButton = buttonWrapper.createEl('button', { text: 'OK' })
-        okButton.addEventListener('click', () => this.submit())
+        okButton.addEventListener('click', () => {
+            void this.submit()
+        })
 
         const cancelButton = buttonWrapper.createEl('button', {
             text: '跳过',
         })
-        cancelButton.addEventListener('click', () => this.cancel())
+        cancelButton.addEventListener('click', () => {
+            void this.cancel()
+        })
 
         this.registerKeyboardShortcuts()
 
@@ -333,15 +353,19 @@ class RewardAndEnergyModal extends Modal {
         this.outsideClickHandler = blockOutside
     }
 
-    private submit() {
+    private async submit() {
         const rewardValue = this.rewardInput.value?.trim()
         const energyValue = this.energyInput.value?.trim()
 
         const hasEmpty =
             (rewardValue?.length ?? 0) === 0 ||
             (energyValue?.length ?? 0) === 0
-        if (hasEmpty && !this.confirmSkip()) {
-            return
+        if (hasEmpty) {
+            const shouldSkip = await this.confirmSkip()
+            if (!shouldSkip) {
+                this.refocusFirstInput()
+                return
+            }
         }
 
         const parsedReward = this.parseValue(rewardValue, 5)
@@ -366,14 +390,18 @@ class RewardAndEnergyModal extends Modal {
         return Math.max(0, Math.min(max, numeric))
     }
 
-    private confirmSkip(): boolean {
+    private async confirmSkip(): Promise<boolean> {
         const rewardValue = this.rewardInput?.value?.trim() ?? ''
         const energyValue = this.energyInput?.value?.trim() ?? ''
         const hasEmpty = rewardValue.length === 0 || energyValue.length === 0
         const message = hasEmpty
             ? '仍有未填写的内容，确定要跳过吗？'
             : '确定要跳过当前提醒吗？'
-        return window.confirm(message)
+        const focusTarget =
+            (document.activeElement as HTMLElement | null) ??
+            this.rewardInput ??
+            this.energyInput
+        return await confirmWithModal(this.app, message, focusTarget)
     }
 
     private registerKeyboardShortcuts() {
@@ -382,21 +410,35 @@ class RewardAndEnergyModal extends Modal {
                 return
             }
             event?.preventDefault()
-            this.submit()
+            void this.submit()
         })
         this.scope.register([], 'Escape', (event) => {
             event?.preventDefault()
-            this.cancel()
+            void this.cancel()
         })
     }
 
-    private cancel() {
-        if (!this.confirmSkip()) {
+    private async cancel() {
+        const shouldSkip = await this.confirmSkip()
+        if (!shouldSkip) {
+            this.refocusFirstInput()
             return
         }
         this.resolved = true
         this.onResult(null)
         this.close()
+    }
+
+    private refocusFirstInput() {
+        window.setTimeout(() => {
+            if (this.rewardInput) {
+                this.rewardInput.focus()
+                this.rewardInput.select()
+                return
+            }
+            this.energyInput?.focus()
+            this.energyInput?.select()
+        }, 0)
     }
 
     private removeOutsideCloseGuard() {
