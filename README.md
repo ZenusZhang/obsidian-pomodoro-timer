@@ -198,4 +198,8 @@ You can adjust the break interval setting to `0`, this will turn off `Break` ses
 
 ---
 
-[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="BuyMeACoffee" width="150">](https://www.buymeacoffee.com/eatgrass)
+## Support
+
+If you'd like to support the project, you can scan either QR code below:
+
+<img src="assets/pics/qr_code_ali.png" alt="Alipay QR" width="200"> <img src="assets/pics/qr_code_wechat.png" alt="WeChat QR" width="200">

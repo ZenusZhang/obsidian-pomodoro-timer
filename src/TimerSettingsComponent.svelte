@@ -45,7 +45,9 @@ const isRecordToggle = (key: ToggleKey) =>
 
 let recordLocked = false
 let shouldShowRandomDensity = false
-$: recordLocked = Boolean($timer?.running)
+$: recordLocked = Boolean(
+    $timer?.running && $timer?.mode === 'WORK',
+)
 $: shouldShowRandomDensity =
     $settings.rewardValueRecord || $settings.energyLevelRecord
 
@@ -167,7 +169,7 @@ const updateRandomTimerDensity = (e: Event) => {
         {#if shouldShowRandomDensity}
             <div class="pomodoro-settings-item">
                 <div class="pomodoro-settings-label">
-                    Random timer density
+                    Notification density
                 </div>
                 <div class="pomodoro-settings-control">
                     <select

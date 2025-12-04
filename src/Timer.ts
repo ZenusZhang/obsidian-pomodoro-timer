@@ -47,6 +47,9 @@ export type TimerRemained = {
     human: string
 }
 
+const RANDOM_PROMPT_CUTOFF_MILLIS = 3 * 60 * 1000
+const RANDOM_PROMPT_BUFFER_MILLIS = 1000
+
 type TimedSample = {
     value: number
     elapsedMillis: number
@@ -250,6 +253,18 @@ export default class Timer implements Readable<TimerStore> {
             return
         }
 
+        const remainingMillis = Math.max(
+            0,
+            this.state.count - this.state.elapsed,
+        )
+        const availableMillis =
+            remainingMillis -
+            RANDOM_PROMPT_CUTOFF_MILLIS -
+            RANDOM_PROMPT_BUFFER_MILLIS
+        if (availableMillis <= 0) {
+            return
+        }
+
         const shouldTrackReward =
             settings.rewardValueRecord && this.state.rewardExpected != null
         const shouldTrackEnergy =
@@ -269,9 +284,13 @@ export default class Timer implements Readable<TimerStore> {
         )
         const delayMinutes = min + Math.random() * (max - min)
         const delayMillis = Math.round(delayMinutes * 60 * 1000)
+        const scheduledDelay = Math.min(delayMillis, availableMillis)
+        if (scheduledDelay <= 0) {
+            return
+        }
         this.randomPromptTimeout = window.setTimeout(() => {
             void this.handleRandomPrompt()
-        }, delayMillis)
+        }, scheduledDelay)
     }
 
     private maybeTriggerReviewReminders(state: TimerState) {
@@ -346,8 +365,6 @@ export default class Timer implements Readable<TimerStore> {
         // This is always called from a timeout callback.
         this.randomPromptTimeout = null
 
-        this.randomPromptCount++
-
         const settings = this.plugin.getSettings()
         if (
             settings.logFormat !== 'POMODORO_SECTION' ||
@@ -356,6 +373,16 @@ export default class Timer implements Readable<TimerStore> {
         ) {
             return
         }
+
+        const remainingMillis = Math.max(
+            0,
+            this.state.count - this.state.elapsed,
+        )
+        if (remainingMillis <= RANDOM_PROMPT_CUTOFF_MILLIS) {
+            return
+        }
+
+        this.randomPromptCount++
 
         const shouldTrackReward =
             settings.rewardValueRecord && this.state.rewardExpected != null
