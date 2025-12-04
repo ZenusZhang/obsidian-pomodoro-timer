@@ -1,205 +1,95 @@
-<h1 align="center">Pomodoro Timer for Obsidian</h1>
+# Pomodoro Timer for Obsidian
 
-![image](https://github.com/eatgrass/obsidian-pomodoro-timer/assets/2351076/f2f4f339-ba66-423f-b6a5-79fe91e13ef0)
+English | [中文](#中文)
 
-## Introduction
+## English
 
-This plugin integrates a customizable Pomodoro timer into your Obsidian workspace, helping you focus and manage your time effectively.
+### Overview
+A focused Pomodoro timer for Obsidian with structured logging, rich reminders, and task-aware workflows.
 
-## Features
+### Highlights
+- Work/break timers in mm:ss with optional autostart; reset during break returns to work; status bar display available.
+- Structured Pomodoro Section logging to daily/weekly/custom notes (auto-creates daily notes if missing) plus Simple/Verbose/Custom formats; integrates with Tasks/Dataview inline fields and updates actual counts.
+- Reward Value Record (0–5) and Energy Level Record (0–10) at pomodoro start, with random prompts during work (Sparse 10–15 min, Medium 5–10 min, Dense 4–7 min; first reminder quicker for Medium/Dense; no prompts in the final 3 minutes). Combined prompts share one modal and always confirm on skip.
+- Active Record menu (work mode) logs inner/outer interrupts with per-pomodoro timestamps.
+- Audio cues: work start plays `assets/pomodorotechnique/windup.wav`; review alerts fire at +2 min and -2 min; random prompts use `review.wav` at boosted volume; break end is silent; custom sound path + system notifications supported.
+- Settings guard: Reward/Energy toggles and density lock while working but are adjustable during breaks; timer length inputs are disabled mid-countdown.
 
--   **Customizable Timer**: Set your work and break intervals to suit your productivity style.
--   **Audible Alerts**: Stay on track with audio notifications signaling the end of each session.
--   **Status Bar Display**: Monitor your progress directly from Obsidian's status bar to keep focusing.
--   **Daily Note Integration**: Automatically log your sessions in your daily notes for better tracking.
--   **Task Tracking**: Automatically refresh the 'actual time' field for the task in focus.
+### Install / Update
+- From releases: download `main.js`, `manifest.json`, and `styles.css` from the latest release and copy them into your vault at `.obsidian/plugins/obsidian-pomodoro-timer/`.
+- Build locally: `npm install` then `npm run build` (artifacts are emitted to the repo root).
 
-## Notification
-
-### Custom Notification Sound
-
-1. Put the audio file into your vault.
-2. Set its path ralative to the vault's root.
-   For example: your audio file is in `AudioFiles` and named `notification.mp3`, your path would be `AudioFiles/notification.mp3`.
-   **Don't forget the file extension (like `.mp3`, `.wav` etc.).**
-3. Click the `play` button next to the path to verify the audio
-
-## Task Tracking
-
-To activate this feature, first enable it in the settings. Then add pomodoros inline-field after your task's text description as below. The pomodoro timer will then automatically update the actual count at the end of each work session.
-
-**Important: Ensure to add this inline-field before the [Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin's fields. Placing it elsewhere may result in incorrect rendering within the Tasks Plugin.**
-
-```markdown
--   [ ] Task with specified expected and actual pomodoros fields [🍅:: 3/10]
--   [ ] Task with only the actual pomodoros field [🍅:: 5]
--   [ ] With Task plugin enabled [🍅:: 5] ➕ 2023-12-29 📅 2024-01-10
-```
-
-## Log
-
-### Log Format
-
-The standard log formats are as follows
-For those requiring more detailed logging, consider setting up a custom [log template](#Custom Log Template) as described below.
-
-**Simple**
+### How to Use
+- Start a pomodoro: click the timer to fill the session description; expected reward (0–5) and energy (0–10) appear when the features are enabled. Work countdown starts immediately with the start sound; breaks do not show the start modal.
+- Random prompts: enable Reward Value Record and/or Energy Level Record with the `Pomodoro Section` log format. Prompts combine inputs in one modal, Enter confirms, Esc cancels, and skip actions require confirmation.
+- Interrupt logging: during work, open `Active Record` to append `i_interupt`/`o_interupt` entries for each timestamp.
+- Logging formats: Simple, Verbose, Custom (Templater), or Pomodoro Section. Pomodoro Section example:
 
 ```
-**WORK(25m)**: 20:16 - 20:17
-**BREAK(25m)**: 20:16 - 20:17
+## Pomodoro Section
+🍅 1 start 09:00 [[path/to/task#^abc|⏹]] 内容: Write spec ERV: 3
+- ARV: 3, 05:00; 4, 12:30
+- 🔋: 7, 00:00; 6, 10:00
+- i_interupt: 06:45
+- o_interupt: 15:10
+1 end 09:25 avg ARV: 3.50
 ```
 
-**Verbose**
+- Task tracking: enable in Settings to auto-update inline fields such as `[🍅:: 3/10]` or `[🍅:: 5]` on Tasks/Dataview items when work sessions finish.
 
-```plain
-- 🍅 (pomodoro::WORK) (duration:: 25m) (begin:: 2023-12-20 15:57) - (end:: 2023-12-20 15:58)
-- 🥤 (pomodoro::BREAK) (duration:: 25m) (begin:: 2023-12-20 16:06) - (end:: 2023-12-20 16:07)
-```
+### Notifications & Audio
+- Custom audio path is relative to your vault root; use the play button to test.
+- System notifications are optional; reminder sounds are amplified, and reset notices show the actual elapsed mm:ss.
 
-### Custom Log Template (Optional)
+### Sponsor
+Support the project:
 
-1. Install the [Templater](https://github.com/SilentVoid13/Templater) plugin.
-2. Compose your log template script using the `log` object, which stores session information.
-
-```javascript
-// TimerLog
-{
-    duration: number,  // duratin in minutes
-    session: number,   // session length
-    finished: boolean, // if the session is finished?
-    mode: string,      // 'WORK' or 'BREAK'
-    begin: Moment,     // start time
-    end: Moment,       // end time
-    task: TaskItem,    // focused task
-}
-
-// TaskItem
-{
-    path: string,         // task file path
-    fileName: string,     // task file name
-    text: string,         // the full text of the task
-    name: string,         // editable task name (default: task description)
-    status: string,       // task checkbox symbol
-    blockLink: string,    // block link id of the task
-    checked: boolean,     // if the task's checkbox checked
-    done: string,         // done date
-    due: string,          // due date
-    created: string,      // created date
-    cancelled: string,    // cancelled date
-    scheduled: string,    // scheduled date
-    start: string,        // start date
-    description: string,  // task description
-    priority: string,     // task priority
-    recurrence: string,   // task recurrence rule
-    tags: string[],       // task tags
-	expected: number,     // expected pomodoros
-	actual: number        // actual pomodoros
-}
-```
-
-here is an example
-
-```javascript
-<%*
-if (log.mode == "WORK") {
-  if (!log.finished) {
-    tR = `🟡 Focused ${log.task.name} ${log.duration} / ${log.session} minutes`;
-  } else {
-    tR = `🍅 Focused ${log.task.name} ${log.duration} minutes`;
-  }
-} else {
-  tR = `☕️ Took a break from ${log.begin.format("HH:mm")} to ${log.end.format(
-    "HH:mm"
-  )}`;
-}
-%>
-```
-
-## Examples of Using with DataView
-
-### Log Table
-
-This DataView script generates a table showing Pomodoro sessions with their durations, start, and end times.
-
-![image](https://github.com/eatgrass/obsidian-pomodoro-timer/assets/2351076/ebcf33ac-291e-4659-ab03-93bfbe1c79d3)
-
-<pre>
-```dataviewjs
-const pages = dv.pages()
-const table = dv.markdownTable(['Pomodoro','Duration', 'Begin', 'End'],
-pages.file.lists
-.filter(item=>item.pomodoro)
-.sort(item => item.end, 'desc')
-.map(item=> {
-
-    return [item.pomodoro, `${item.duration.as('minutes')} m`, item.begin, item.end]
-})
-)
-dv.paragraph(table)
-
-```  
-</pre>
-
-### Summary View
-
-This DataView script presents a summary of Pomodoro sessions, categorized by date.
-
-![image](https://github.com/eatgrass/obsidian-pomodoro-timer/assets/2351076/84119bb0-c78e-4716-9a76-ffa72d94a587)
-
-<pre>
-```dataviewjs
-const pages = dv.pages();
-const emoji = "🍅";
-dv.table(
-  ["Date", "Pomodoros", "Total"],
-  pages.file.lists
-    .filter((item) => item?.pomodoro == "WORK")
-    .groupBy((item) => {
-      if (item.end && item.end.length >= 10) {
-        return item.end.substring(0, 10);
-      } else {
-        return "Unknown Date";
-      }
-    })
-    .map((group) => {
-      let sum = 0;
-      group.rows.forEach((row) => (sum += row.duration.as("minutes")));
-      return [
-        group.key,
-        group.rows.length > 5
-          ? `${emoji}  ${group.rows.length}`
-          : `${emoji.repeat(group.rows.length)}`,
-        `${sum} min`,
-      ];
-    })
-)
-```
-</pre>
-
-## CSS Variables
-
-| Variable                       | Default            |
-| ------------------------------ | ------------------ |
-| --pomodoro-timer-color         | var(--text-faint)  |
-| --pomodoro-timer-elapsed-color | var(--color-green) |
-| --pomodoro-timer-text-color    | var(--text-normal) |
-| --pomodoro-timer-dot-color     | var(--color-ted)   |
-
-## FAQ
-
-1. How to Switch the Session
-
-To switch sessions, simply click on the `Work/Break` label displayed on the timer.
-
-2. How to completely disable `Break` sessions
-
-You can adjust the break interval setting to `0`, this will turn off `Break` sessions.
+![Alipay](assets/pics/qr_code_ali.png)
+![WeChat](assets/pics/qr_code_wechat.png)
 
 ---
 
-## Support
+## 中文
 
-If you'd like to support the project, you can scan either QR code below:
+### 概览
+面向 Obsidian 的番茄钟，提供结构化日志、随机记录提醒、任务联动与丰富的提示音。
 
-<img src="assets/pics/qr_code_ali.png" alt="Alipay QR" width="200"> <img src="assets/pics/qr_code_wechat.png" alt="WeChat QR" width="200">
+### 亮点
+- 工休计时使用 mm:ss，可选自动开始；休息时重置会直接回到工作；支持状态栏显示。
+- Pomodoro Section 结构化日志可写入日/周记或自定义文件（自动创建当日日记），也支持简单/详细/自定义格式；兼容 Tasks/Dataview 的行内字段并自动回写实际次数。
+- 番茄开始时可填写愉悦值（0–5）与电量（0–10）；工作中按密度随机弹窗（稀疏 10–15 分，中等 5–10 分，密集 4–7 分，中/密首条更快，最后 3 分钟内不提醒），双输入同窗展示，跳过前需确认。
+- 工作模式下的“主动记录”可记录内/外部打扰，逐条写入带时间戳的 i_interupt/o_interupt 行。
+- 提示音：工作开始播放 `windup.wav`；开局 2 分钟与结束前 2 分钟播放 `review.wav`；随机提醒也用加大的 review 声音；休息结束静音；支持自定义声音与系统通知。
+- 设置保护：工作计时时锁定愉悦值/电量及密度开关，休息时可调整；倒计时进行中不可直接改动时长输入。
+
+### 安装 / 更新
+- 从 Release 获取：下载最新发布里的 `main.js`、`manifest.json`、`styles.css`，放入库目录下 `.obsidian/plugins/obsidian-pomodoro-timer/`。
+- 本地构建：运行 `npm install` 后 `npm run build`，产物在仓库根目录。
+
+### 使用指南
+- 开始番茄：点击计时器填写当次内容，开启相关功能后可录入预期愉悦值与当前电量。工作倒计时立即开始并播放起始音，休息阶段不弹出开始窗口。
+- 随机提醒：在设置中启用 Reward Value Record / Energy Level Record 并选择 `Pomodoro Section` 日志格式。提示窗支持回车确认、Esc 取消，跳过前会提示确认。
+- 打扰记录：工作时通过 `Active Record` 记录内部/外部打扰，时间戳会写入本次番茄的日志块。
+- 日志格式：支持简单、详细、自定义（Templater）或 Pomodoro Section。Pomodoro Section 示例：
+
+```
+## Pomodoro Section
+🍅 1 start 09:00 [[path/to/task#^abc|⏹]] 内容: 写设计稿 ERV: 3
+- ARV: 3, 05:00; 4, 12:30
+- 🔋: 7, 00:00; 6, 10:00
+- i_interupt: 06:45
+- o_interupt: 15:10
+1 end 09:25 avg ARV: 3.50
+```
+
+- 任务追踪：在设置中开启后，工作结束会自动更新任务行内字段（如 `[🍅:: 3/10]` 或 `[🍅:: 5]`）并维护 Tasks/Dataview 兼容的 block 链接。
+
+### 提示音与通知
+- 自定义音频路径相对库根目录，点击播放按钮可测试。
+- 可选系统通知；提醒音已放大，重置结束提示显示实际耗时（mm:ss）。
+
+### 赞助
+欢迎赞助支持：
+
+![支付宝](assets/pics/qr_code_ali.png)
+![微信](assets/pics/qr_code_wechat.png)
