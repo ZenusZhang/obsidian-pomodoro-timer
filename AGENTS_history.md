@@ -248,3 +248,12 @@ AVG ARV不再单独一行被记录，而是应该记录在end的那条记录中�
   - 随机提醒在番茄钟最后 3 分钟窗口内不再触发，并避免调度至接近结束的时间点。
   - 设置锁定仅限工作计时进行时，休息倒计时可自由调整相关开关和随机密度。
   - 移除 Buy Me a Coffee 链接，改为提供支付宝与微信赞助二维码。
+
+# 第二十一轮的需求
+根据之前的需求，修改readme，并且提供中英版本的。修改之后把commit交到github，并且要把main.js manifest.json styles.css作为release发布在github上。
+
+# 第二十一轮的修改
+- 2025-12-04 Codex: 完成第二十一轮需求（commit 25fcfdc）：
+  - README 重写为中英双语版，补充随机提醒、主动记录、提示音及赞助二维码的最新说明。
+  - 版本号升级至 1.2.4，同步 manifest/versions.json 并重建发布产物。
+  - 将 main.js、manifest.json、styles.css 作为 1.2.4 发布资产上传 GitHub。
