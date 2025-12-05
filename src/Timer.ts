@@ -49,6 +49,8 @@ export type TimerRemained = {
 
 const RANDOM_PROMPT_CUTOFF_MILLIS = 3 * 60 * 1000
 const RANDOM_PROMPT_BUFFER_MILLIS = 1000
+const RANDOM_PROMPT_DEADZONE_MILLIS =
+    RANDOM_PROMPT_CUTOFF_MILLIS + RANDOM_PROMPT_BUFFER_MILLIS
 
 type TimedSample = {
     value: number
@@ -257,11 +259,10 @@ export default class Timer implements Readable<TimerStore> {
             0,
             this.state.count - this.state.elapsed,
         )
-        const availableMillis =
-            remainingMillis -
-            RANDOM_PROMPT_CUTOFF_MILLIS -
-            RANDOM_PROMPT_BUFFER_MILLIS
-        if (availableMillis <= 0) {
+        const latestAllowedDelay =
+            remainingMillis - RANDOM_PROMPT_DEADZONE_MILLIS
+        if (latestAllowedDelay <= 0) {
+            this.clearRandomPromptTimeout()
             return
         }
 
@@ -282,15 +283,18 @@ export default class Timer implements Readable<TimerStore> {
             density,
             isFirstReminder,
         )
-        const delayMinutes = min + Math.random() * (max - min)
-        const delayMillis = Math.round(delayMinutes * 60 * 1000)
-        const scheduledDelay = Math.min(delayMillis, availableMillis)
-        if (scheduledDelay <= 0) {
+        const minDelayMillis = min * 60 * 1000
+        const maxDelayMillis = max * 60 * 1000
+        const cappedMaxDelay = Math.min(maxDelayMillis, latestAllowedDelay)
+        if (cappedMaxDelay <= minDelayMillis) {
             return
         }
+        const delayMillis =
+            minDelayMillis +
+            Math.random() * (cappedMaxDelay - minDelayMillis)
         this.randomPromptTimeout = window.setTimeout(() => {
             void this.handleRandomPrompt()
-        }, scheduledDelay)
+        }, Math.round(delayMillis))
     }
 
     private maybeTriggerReviewReminders(state: TimerState) {
@@ -378,7 +382,7 @@ export default class Timer implements Readable<TimerStore> {
             0,
             this.state.count - this.state.elapsed,
         )
-        if (remainingMillis <= RANDOM_PROMPT_CUTOFF_MILLIS) {
+        if (remainingMillis <= RANDOM_PROMPT_DEADZONE_MILLIS) {
             return
         }
 
